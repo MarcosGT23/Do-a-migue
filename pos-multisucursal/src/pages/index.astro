@@ -1,0 +1,12 @@
+---
+export const prerender = false;
+import { obtenerContextoSesion } from '../core/sessionContext';
+
+const sesion = await obtenerContextoSesion(Astro.cookies);
+
+if (!sesion.autenticado) {
+  return Astro.redirect('/login');
+}
+
+return Astro.redirect(sesion.esAdminOSupervisor ? '/admin/dashboard' : '/pos');
+---

@@ -1,0 +1,25 @@
+---
+export const prerender = false;
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import OrganizacionManager from '../../components/admin/OrganizacionManager';
+import { obtenerContextoSesion } from '../../core/sessionContext';
+
+const sesion = await obtenerContextoSesion(Astro.cookies);
+if (!sesion.autenticado) {
+  return Astro.redirect('/login');
+}
+if (!sesion.esAdminOSupervisor) {
+  return Astro.redirect('/pos');
+}
+
+const { data: sucursales } = await sesion.supabaseSSR.from('sucursales').select('*').order('id');
+const { data: usuarios } = await sesion.supabaseSSR.from('usuarios').select('*').order('created_at');
+---
+
+<AdminLayout title="Sucursales y Usuarios">
+  <OrganizacionManager
+    client:load
+    sucursalesIniciales={sucursales || []}
+    usuariosIniciales={usuarios || []}
+  />
+</AdminLayout>

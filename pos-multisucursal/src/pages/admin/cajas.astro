@@ -1,0 +1,34 @@
+---
+export const prerender = false;
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import CajasManager from '../../components/admin/CajasManager';
+import { obtenerContextoSesion } from '../../core/sessionContext';
+
+const sesion = await obtenerContextoSesion(Astro.cookies);
+if (!sesion.autenticado) {
+  return Astro.redirect('/login');
+}
+if (!sesion.esAdminOSupervisor) {
+  return Astro.redirect('/pos');
+}
+
+const { data: cajasData } = await sesion.supabaseSSR
+  .from('apertura_cajas')
+  .select(`
+    id, monto_inicial, monto_efectivo_sistema, monto_digital_sistema,
+    monto_efectivo_declarado, monto_digital_declarado,
+    diferencia_efectivo, diferencia_digital, fecha_inicio, fecha_fin, estado,
+    usuarios ( nombre_completo )
+  `)
+  .order('fecha_inicio', { ascending: false })
+  .limit(30);
+
+const cajasFormateadas = (cajasData || []).map((c: any) => ({
+  ...c,
+  usuario_nombre: c.usuarios?.nombre_completo || 'Cajero',
+}));
+---
+
+<AdminLayout title="Auditoría de Cajas">
+  <CajasManager client:load cajas={cajasFormateadas} />
+</AdminLayout>

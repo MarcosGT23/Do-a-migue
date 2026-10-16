@@ -1,0 +1,76 @@
+---
+export const prerender = false;
+import PosLayout from '../../layouts/PosLayout.astro';
+import PosTerminal from '../../components/pos/PosTerminal';
+import { obtenerContextoSesion } from '../../core/sessionContext';
+
+const sesion = await obtenerContextoSesion(Astro.cookies);
+
+// Si no ha iniciado sesión, redirige a /login
+if (!sesion.autenticado) {
+  return Astro.redirect('/login');
+}
+
+// Todas las consultas usan sesion.supabaseSSR (autenticado con el JWT del usuario para pasar el RLS)
+const { data: cajaAbierta } = await sesion.supabaseSSR
+  .from('apertura_cajas')
+  .select(`
+    id,
+    sucursal_id,
+    usuario_id,
+    monto_inicial,
+    fecha_inicio,
+    estado,
+    monto_efectivo_sistema,
+    monto_digital_sistema,
+    usuarios ( id, nombre_completo, rol )
+  `)
+  .eq('sucursal_id', sesion.sucursalId)
+  .eq('estado', 'ABIERTA')
+  .order('fecha_inicio', { ascending: false })
+  .limit(1)
+  .maybeSingle();
+
+const { data: categorias } = await sesion.supabaseSSR
+  .from('categorias')
+  .select('id, nombre')
+  .eq('activa', true)
+  .order('orden');
+
+const { data: inventarioProductos } = await sesion.supabaseSSR
+  .from('inventario')
+  .select(`
+    stock_actual,
+    stock_minimo,
+    productos ( id, categoria_id, nombre, precio_base, imagen_url, activo )
+  `)
+  .eq('sucursal_id', sesion.sucursalId);
+
+const productosFormateados = (inventarioProductos || [])
+  .filter((row: any) => row.productos?.activo)
+  .map((row: any) => ({
+    id: row.productos.id,
+    categoria_id: row.productos.categoria_id,
+    nombre: row.productos.nombre,
+    precio_base: Number(row.productos.precio_base),
+    imagen_url: row.productos.imagen_url,
+    stock_actual: row.stock_actual,
+    stock_minimo: row.stock_minimo,
+  }));
+---
+
+<PosLayout title="Catálogo y Caja">
+  <PosTerminal
+    client:load
+    cajaActivaId={cajaAbierta?.id || null}
+    cajaInicialInfo={cajaAbierta || null}
+    sucursalId={sesion.sucursalId}
+    usuarioId={sesion.usuarioId}
+    cajeroNombre={sesion.nombreCompleto}
+    rol={sesion.rol}
+    esAdminOSupervisor={sesion.esAdminOSupervisor}
+    sucursalNombre={sesion.sucursalNombre}
+    categoriasIniciales={categorias || []}
+    productosIniciales={productosFormateados}
+  />
+</PosLayout>

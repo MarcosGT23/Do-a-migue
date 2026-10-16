@@ -1,0 +1,44 @@
+---
+export const prerender = false;
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import CatalogoManager from '../../components/admin/CatalogoManager';
+import { obtenerContextoSesion } from '../../core/sessionContext';
+
+const sesion = await obtenerContextoSesion(Astro.cookies);
+if (!sesion.autenticado) {
+  return Astro.redirect('/login');
+}
+if (!sesion.esAdminOSupervisor) {
+  return Astro.redirect('/pos');
+}
+
+const { data: categorias } = await sesion.supabaseSSR.from('categorias').select('*').order('orden');
+const { data: productos } = await sesion.supabaseSSR
+  .from('productos')
+  .select('id, categoria_id, nombre, descripcion, precio_base, activo, categorias ( nombre ), inventario ( sucursal_id, stock_actual )')
+  .order('id');
+
+const productosFormateados = (productos || []).map((p: any) => {
+  const invSucursal = (p.inventario || []).find((i: any) => i.sucursal_id === sesion.sucursalId);
+  return {
+    id: p.id,
+    categoria_id: p.categoria_id,
+    categoria_nombre: p.categorias?.nombre || 'General',
+    nombre: p.nombre,
+    descripcion: p.descripcion,
+    precio_base: Number(p.precio_base),
+    activo: p.activo,
+    stock_actual: invSucursal ? invSucursal.stock_actual : 0,
+  };
+});
+---
+
+<AdminLayout title="Gestión de Catálogo">
+  <CatalogoManager
+    client:load
+    sucursalId={sesion.sucursalId}
+    usuarioId={sesion.usuarioId}
+    categoriasIniciales={categorias || []}
+    productosIniciales={productosFormateados}
+  />
+</AdminLayout>

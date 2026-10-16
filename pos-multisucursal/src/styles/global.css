@@ -1,0 +1,146 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    
+    /* Paleta Inspirada en la Cocina y Brasa Tradicional de Doña Migue */
+    --hearth-base: #100f0e;
+    --hearth-surface: #191715;
+    --hearth-card: #221f1c;
+    --hearth-card-hover: #2c2824;
+    --hearth-border: #332d27;
+    --hearth-border-subtle: #24201c;
+    
+    --ember-primary: #ea580c;
+    --ember-hover: #f97316;
+    --ember-glow: rgba(234, 88, 12, 0.2);
+    
+    --parchment-100: #fbf9f5;
+    --parchment-200: #ede7dc;
+    --parchment-400: #9e9382;
+    --parchment-600: #685f52;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--hearth-base);
+    color: var(--parchment-200);
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #141210;
+}
+::-webkit-scrollbar-thumb {
+  background: #2f2a24;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #473f36;
+}
+
+/* Tabular Numbers for POS & Accounting */
+.num-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Ticket Paper Aesthetic */
+.ticket-paper {
+  background: #1c1916;
+  background-image: radial-gradient(#29241f 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+/* Ocultar el portal del ticket térmico en pantalla regular */
+#ticket-termico-impresion-portal {
+  display: none !important;
+}
+
+/* 🖨️ Estilos Profesionales para Impresión Térmica de Tickets (ESC/POS 80 x 297 mm) */
+@media print {
+  @page {
+    size: 80mm 297mm;
+    margin: 0mm !important;
+  }
+
+  /* Asegurar que los colores y fondos se impriman con fidelidad */
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Ocultar todos los elementos generales de la web al imprimir */
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0mm !important;
+    padding: 0mm !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Ocultar absolutamente todo en el body para que nada ocupe espacio de flujo */
+  body > * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Mostrar ÚNICAMENTE el portal montado en la raíz de document.body */
+  body > #ticket-termico-impresion-portal {
+    display: block !important;
+    visibility: visible !important;
+    position: absolute !important;
+    top: 0mm !important;
+    left: 0mm !important;
+    right: 0mm !important;
+    margin: 0 auto !important;
+    margin-top: 0mm !important;
+    padding: 0mm 2.5mm 3mm 2.5mm !important; /* CERO ESPACIO SUPERIOR */
+    padding-top: 0mm !important;
+    background: #ffffff !important;
+    box-sizing: border-box !important;
+    font-family: 'Courier New', Courier, monospace !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+  }
+
+  body > #ticket-termico-impresion-portal * {
+    visibility: visible !important;
+  }
+
+  #ticket-termico-impresion-portal > *:first-child {
+    margin-top: 0mm !important;
+    padding-top: 0mm !important;
+  }
+
+  /* Anchos de seguridad para que ningún texto corte en los bordes del papel */
+  .ticket-ancho-80mm {
+    width: 72mm !important;
+    max-width: 72mm !important;
+    font-size: 11px !important;
+    line-height: 1.25 !important;
+  }
+
+  .ticket-ancho-58mm {
+    width: 48mm !important;
+    max-width: 48mm !important;
+    font-size: 9.5px !important;
+    line-height: 1.15 !important;
+  }
+
+  /* Desactivar fondos y controles no imprimibles */
+  .no-print {
+    display: none !important;
+  }
+}

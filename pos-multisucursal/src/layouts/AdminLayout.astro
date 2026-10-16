@@ -1,0 +1,49 @@
+---
+import { ClientRouter } from 'astro:transitions';
+import AdminSidebar from '../components/admin/AdminSidebar';
+import { obtenerContextoSesion } from '../core/sessionContext';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+const rutaActual = Astro.url.pathname;
+const sesion = await obtenerContextoSesion(Astro.cookies);
+
+if (!sesion.autenticado) {
+  return Astro.redirect('/login');
+}
+
+if (!sesion.esAdminOSupervisor) {
+  return Astro.redirect('/pos');
+}
+---
+
+<!doctype html>
+<html lang="es" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} | Doña Migue Administración</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <ClientRouter />
+  </head>
+  <body class="bg-[#100f0e] text-[#ede7dc] flex h-screen overflow-hidden antialiased">
+    <AdminSidebar
+      client:load
+      rutaActual={rutaActual}
+      adminNombre={sesion.nombreCompleto}
+      sucursalNombre={sesion.sucursalNombre}
+    />
+    <main class="flex-1 h-full overflow-y-auto bg-[#141210]">
+      <slot />
+    </main>
+  </body>
+</html>
