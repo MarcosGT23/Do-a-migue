@@ -2,8 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast, Toaster } from 'sonner';
 import {
-  Plus, Search, Layers, Edit2,
-  CheckCircle2, XCircle, X
+  Plus, Search, Layers, Edit2, Trash2,
+  CheckCircle2, XCircle, X, AlertTriangle
 } from 'lucide-react';
 import { PosService } from '../../services/pos.service';
 
@@ -55,10 +55,19 @@ export default function CatalogoManager({
   const [formCategoriaId, setFormCategoriaId] = useState<number>(categorias[0]?.id || 1);
   const [formActivo, setFormActivo] = useState(true);
 
-  // Formulario Categoría
+  // Eliminar Producto
+  const [productoParaEliminar, setProductoParaEliminar] = useState<Producto | null>(null);
+  const [eliminandoProducto, setEliminandoProducto] = useState(false);
+
+  // Formulario Categoría (Crear / Editar)
+  const [categoriaEditando, setCategoriaEditando] = useState<Categoria | null>(null);
   const [catNombre, setCatNombre] = useState('');
   const [catDescripcion, setCatDescripcion] = useState('');
   const [catOrden, setCatOrden] = useState('1');
+
+  // Eliminar Categoría
+  const [categoriaParaEliminar, setCategoriaParaEliminar] = useState<Categoria | null>(null);
+  const [eliminandoCategoria, setEliminandoCategoria] = useState(false);
 
   const abrirModalCrearProducto = () => {
     setProductoEditando(null);
@@ -78,6 +87,22 @@ export default function CatalogoManager({
     setFormCategoriaId(prod.categoria_id);
     setFormActivo(prod.activo);
     setModalProductoAbierto(true);
+  };
+
+  const abrirModalCrearCategoria = () => {
+    setCategoriaEditando(null);
+    setCatNombre('');
+    setCatDescripcion('');
+    setCatOrden((categorias.length + 1).toString());
+    setModalCategoriaAbierto(true);
+  };
+
+  const abrirModalEditarCategoria = (cat: Categoria) => {
+    setCategoriaEditando(cat);
+    setCatNombre(cat.nombre);
+    setCatDescripcion(cat.descripcion || '');
+    setCatOrden((cat.orden || 1).toString());
+    setModalCategoriaAbierto(true);
   };
 
   const guardarProductoHandler = async (e: React.SyntheticEvent) => {
@@ -133,10 +158,28 @@ export default function CatalogoManager({
     };
 
     toast.promise(promesa(), {
-      loading: 'Guardando datos del plato...',
-      success: 'Plato guardado con éxito',
+      loading: productoEditando ? 'Actualizando datos del plato...' : 'Creando nuevo plato...',
+      success: productoEditando ? 'Plato actualizado con éxito' : 'Plato añadido con éxito',
       error: (err) => err.message,
       finally: () => setGuardando(false),
+    });
+  };
+
+  const confirmarEliminarProducto = async () => {
+    if (!productoParaEliminar) return;
+    setEliminandoProducto(true);
+
+    const promesa = async () => {
+      await PosService.eliminarProducto(productoParaEliminar.id);
+      setProductos((prev) => prev.filter((p) => p.id !== productoParaEliminar.id));
+      setProductoParaEliminar(null);
+    };
+
+    toast.promise(promesa(), {
+      loading: 'Eliminando plato del catálogo...',
+      success: 'Plato procesado con éxito',
+      error: (err) => err.message,
+      finally: () => setEliminandoProducto(false),
     });
   };
 
@@ -145,26 +188,77 @@ export default function CatalogoManager({
     setGuardando(true);
 
     const promesa = async () => {
-      const nuevaCat = await PosService.crearCategoria({
-        nombre: catNombre.trim(),
-        descripcion: catDescripcion.trim(),
-        orden: parseInt(catOrden) || 1,
-      });
+      if (categoriaEditando) {
+        const catActualizada = await PosService.actualizarCategoria({
+          id: categoriaEditando.id,
+          nombre: catNombre.trim(),
+          descripcion: catDescripcion.trim(),
+          orden: parseInt(catOrden) || 1,
+        });
 
-      setCategorias((prev) => [...prev, nuevaCat]);
-      setModalCategoriaAbierto(false);
-      setCatNombre('');
-      setCatDescripcion('');
-      return nuevaCat;
+        setCategorias((prev) =>
+          prev.map((c) => (c.id === categoriaEditando.id ? { ...c, ...catActualizada } : c))
+        );
+
+        // Actualizar nombres en productos
+        setProductos((prev) =>
+          prev.map((p) =>
+            p.categoria_id === categoriaEditando.id
+              ? { ...p, categoria_nombre: catActualizada.nombre }
+              : p
+          )
+        );
+
+        setModalCategoriaAbierto(false);
+        return catActualizada;
+      } else {
+        const nuevaCat = await PosService.crearCategoria({
+          nombre: catNombre.trim(),
+          descripcion: catDescripcion.trim(),
+          orden: parseInt(catOrden) || 1,
+        });
+
+        setCategorias((prev) => [...prev, nuevaCat]);
+        setModalCategoriaAbierto(false);
+        setCatNombre('');
+        setCatDescripcion('');
+        return nuevaCat;
+      }
     };
 
     toast.promise(promesa(), {
-      loading: 'Creando categoría...',
-      success: 'Categoría añadida con éxito',
+      loading: categoriaEditando ? 'Actualizando categoría...' : 'Creando categoría...',
+      success: categoriaEditando ? 'Categoría actualizada con éxito' : 'Categoría añadida con éxito',
       error: (err) => err.message,
       finally: () => setGuardando(false),
     });
   };
+
+  const confirmarEliminarCategoria = async () => {
+    if (!categoriaParaEliminar) return;
+    setEliminandoCategoria(true);
+
+    const promesa = async () => {
+      await PosService.eliminarCategoria(categoriaParaEliminar.id);
+      setCategorias((prev) => prev.filter((c) => c.id !== categoriaParaEliminar.id));
+      if (categoriaSeleccionada === categoriaParaEliminar.id) {
+        setCategoriaSeleccionada('TODAS');
+      }
+      setCategoriaParaEliminar(null);
+    };
+
+    toast.promise(promesa(), {
+      loading: 'Eliminando categoría...',
+      success: 'Categoría eliminada con éxito',
+      error: (err) => err.message,
+      finally: () => setEliminandoCategoria(false),
+    });
+  };
+
+  const categoriaActivaObj = useMemo(() => {
+    if (categoriaSeleccionada === 'TODAS') return null;
+    return categorias.find((c) => c.id === categoriaSeleccionada) || null;
+  }, [categorias, categoriaSeleccionada]);
 
   const productosFiltrados = useMemo(() => {
     return productos.filter((p) => {
@@ -194,8 +288,8 @@ export default function CatalogoManager({
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setModalCategoriaAbierto(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1715] border border-[#2b2520] text-[#ede7dc] hover:border-[#473c33] text-xs font-semibold transition"
+            onClick={abrirModalCrearCategoria}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1715] border border-[#2b2520] text-[#ede7dc] hover:border-amber-600/40 text-xs font-semibold transition"
           >
             <Layers className="w-4 h-4 text-amber-500" />
             <span>Nueva Categoría</span>
@@ -210,20 +304,46 @@ export default function CatalogoManager({
         </div>
       </div>
 
-      {/* Filtros */}
-      <div className="flex flex-col sm:flex-row items-center gap-4 bg-[#1a1715] border border-[#2b2520] p-4 rounded-2xl">
-        <div className="relative flex-1 w-full">
-          <Search className="w-4 h-4 text-[#7a6f5f] absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar plato por nombre..."
-            className="w-full pl-10 pr-4 py-2 bg-[#100f0e] border border-[#2b2520] rounded-xl text-xs text-white placeholder-[#6e6355] focus:outline-none focus:border-amber-600 transition"
-          />
+      {/* Filtros de Búsqueda y Pestañas de Categoría */}
+      <div className="space-y-3 bg-[#1a1715] border border-[#2b2520] p-4 rounded-2xl">
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <div className="relative flex-1 w-full">
+            <Search className="w-4 h-4 text-[#7a6f5f] absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar plato por nombre..."
+              className="w-full pl-10 pr-4 py-2 bg-[#100f0e] border border-[#2b2520] rounded-xl text-xs text-white placeholder-[#6e6355] focus:outline-none focus:border-amber-600 transition"
+            />
+          </div>
+
+          {/* Acciones de la categoría activa seleccionada */}
+          {categoriaActivaObj && (
+            <div className="flex items-center gap-2 shrink-0 bg-[#12100f] border border-[#29231e] px-3 py-1.5 rounded-xl">
+              <span className="text-[11px] text-[#9c907f] font-medium truncate max-w-[140px]">
+                {categoriaActivaObj.nombre}
+              </span>
+              <button
+                onClick={() => abrirModalEditarCategoria(categoriaActivaObj)}
+                className="p-1 rounded-lg hover:bg-[#26201a] text-amber-400 transition"
+                title="Editar nombre y datos de esta categoría"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setCategoriaParaEliminar(categoriaActivaObj)}
+                className="p-1 rounded-lg hover:bg-rose-950/40 text-rose-400 transition"
+                title="Eliminar esta categoría"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto no-scrollbar">
+        {/* Barra de Categorías */}
+        <div className="flex items-center gap-2 overflow-x-auto w-full no-scrollbar pt-1">
           <button
             onClick={() => setCategoriaSeleccionada('TODAS')}
             className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
@@ -234,19 +354,26 @@ export default function CatalogoManager({
           >
             Todas ({productos.length})
           </button>
-          {categorias.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setCategoriaSeleccionada(cat.id)}
-              className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
-                categoriaSeleccionada === cat.id
-                  ? 'bg-amber-600/20 text-amber-300 border border-amber-600/40'
-                  : 'text-[#9c907f] hover:text-white bg-[#100f0e]'
-              }`}
-            >
-              {cat.nombre}
-            </button>
-          ))}
+          {categorias.map((cat) => {
+            const countProd = productos.filter((p) => p.categoria_id === cat.id).length;
+            const esActiva = categoriaSeleccionada === cat.id;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setCategoriaSeleccionada(cat.id)}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition flex items-center gap-2 ${
+                  esActiva
+                    ? 'bg-amber-600/20 text-amber-300 border border-amber-600/40'
+                    : 'text-[#9c907f] hover:text-white bg-[#100f0e]'
+                }`}
+              >
+                <span>{cat.nombre}</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#26211c] text-[#8c806f]">
+                  {countProd}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -261,7 +388,7 @@ export default function CatalogoManager({
                 <th className="py-3 px-4 font-semibold">Precio Base</th>
                 <th className="py-3 px-4 font-semibold">Stock Actual</th>
                 <th className="py-3 px-4 font-semibold">Estado</th>
-                <th className="py-3 px-4 font-semibold text-right">Acción</th>
+                <th className="py-3 px-4 font-semibold text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#26211c]">
@@ -307,13 +434,22 @@ export default function CatalogoManager({
                       )}
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => abrirModalEditarProducto(prod)}
-                        className="p-1.5 rounded-lg bg-[#100f0e] border border-[#2b2520] text-[#9c907f] hover:text-white hover:border-amber-600 transition"
-                        title="Editar plato"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => abrirModalEditarProducto(prod)}
+                          className="p-1.5 rounded-lg bg-[#100f0e] border border-[#2b2520] text-[#9c907f] hover:text-white hover:border-amber-600 transition"
+                          title="Editar plato"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setProductoParaEliminar(prod)}
+                          className="p-1.5 rounded-lg bg-[#100f0e] border border-[#2b2520] text-[#9c907f] hover:text-rose-400 hover:border-rose-800 transition"
+                          title="Eliminar plato"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -417,20 +553,82 @@ export default function CatalogoManager({
                   </label>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={guardando}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-md transition"
-                >
-                  {guardando ? 'Guardando...' : 'Guardar Plato'}
-                </button>
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setModalProductoAbierto(false)}
+                    className="w-1/2 py-2.5 rounded-xl bg-[#26211c] hover:bg-[#332c25] text-[#ede7dc] font-semibold text-xs transition"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={guardando}
+                    className="w-1/2 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-md transition"
+                  >
+                    {guardando
+                      ? 'Guardando...'
+                      : productoEditando
+                      ? 'Actualizar Plato'
+                      : 'Guardar Plato'}
+                  </button>
+                </div>
               </form>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Modal Nueva Categoría */}
+      {/* Modal Eliminar Producto */}
+      <AnimatePresence>
+        {productoParaEliminar && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.94, opacity: 0 }}
+              className="bg-[#181614] border border-[#2e2721] rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl text-center"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-rose-950/60 border border-rose-800/40 text-rose-400 flex items-center justify-center mx-auto">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+
+              <div>
+                <h3 className="text-base font-bold text-white">¿Eliminar Plato?</h3>
+                <p className="text-xs text-[#9c907f] mt-1.5">
+                  Estás a punto de quitar del menú: <strong className="text-white">{productoParaEliminar.nombre}</strong> (Bs {productoParaEliminar.precio_base.toFixed(2)}).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setProductoParaEliminar(null)}
+                  disabled={eliminandoProducto}
+                  className="w-1/2 py-2.5 rounded-xl bg-[#26211c] hover:bg-[#332c25] text-[#ede7dc] font-semibold text-xs transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmarEliminarProducto}
+                  disabled={eliminandoProducto}
+                  className="w-1/2 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-600/20 transition"
+                >
+                  {eliminandoProducto ? 'Eliminando...' : 'Sí, Eliminar'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal Crear / Editar Categoría */}
       <AnimatePresence>
         {modalCategoriaAbierto && (
           <motion.div
@@ -446,7 +644,9 @@ export default function CatalogoManager({
               className="bg-[#181614] border border-[#2e2721] rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl"
             >
               <div className="flex justify-between items-center">
-                <h3 className="text-base font-bold text-white">Nueva Categoría de Carta</h3>
+                <h3 className="text-base font-bold text-white">
+                  {categoriaEditando ? 'Editar Categoría de Carta' : 'Nueva Categoría de Carta'}
+                </h3>
                 <button
                   onClick={() => setModalCategoriaAbierto(false)}
                   className="text-[#7a6f5f] hover:text-white"
@@ -457,7 +657,7 @@ export default function CatalogoManager({
 
               <form onSubmit={guardarCategoriaHandler} className="space-y-3.5">
                 <div>
-                  <label className="text-xs text-[#ede7dc]">Nombre</label>
+                  <label className="text-xs text-[#ede7dc]">Nombre de la Categoría</label>
                   <input
                     type="text"
                     required
@@ -489,14 +689,76 @@ export default function CatalogoManager({
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={guardando}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs transition"
-                >
-                  {guardando ? 'Guardando...' : 'Crear Categoría'}
-                </button>
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setModalCategoriaAbierto(false)}
+                    className="w-1/2 py-2.5 rounded-xl bg-[#26211c] hover:bg-[#332c25] text-[#ede7dc] font-semibold text-xs transition"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={guardando}
+                    className="w-1/2 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs transition"
+                  >
+                    {guardando
+                      ? 'Guardando...'
+                      : categoriaEditando
+                      ? 'Actualizar'
+                      : 'Crear Categoría'}
+                  </button>
+                </div>
               </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal Eliminar Categoría */}
+      <AnimatePresence>
+        {categoriaParaEliminar && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.94, opacity: 0 }}
+              className="bg-[#181614] border border-[#2e2721] rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl text-center"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-rose-950/60 border border-rose-800/40 text-rose-400 flex items-center justify-center mx-auto">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+
+              <div>
+                <h3 className="text-base font-bold text-white">¿Eliminar Categoría?</h3>
+                <p className="text-xs text-[#9c907f] mt-1.5">
+                  Estás a punto de eliminar la categoría <strong className="text-white">{categoriaParaEliminar.nombre}</strong>. Solo es posible si no contiene platos asociados.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCategoriaParaEliminar(null)}
+                  disabled={eliminandoCategoria}
+                  className="w-1/2 py-2.5 rounded-xl bg-[#26211c] hover:bg-[#332c25] text-[#ede7dc] font-semibold text-xs transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmarEliminarCategoria}
+                  disabled={eliminandoCategoria}
+                  className="w-1/2 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-600/20 transition"
+                >
+                  {eliminandoCategoria ? 'Eliminando...' : 'Sí, Eliminar'}
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

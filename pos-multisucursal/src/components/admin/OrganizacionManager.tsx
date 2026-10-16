@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast, Toaster } from 'sonner';
 import {
   Building2, Users, Plus, Edit3,
-  Phone, MapPin, X
+  Phone, MapPin, X, Trash2, AlertTriangle
 } from 'lucide-react';
 import { PosService, type RolUsuario } from '../../services/pos.service';
 
@@ -37,12 +37,17 @@ export default function OrganizacionManager({
   const [sucursales, setSucursales] = useState<Sucursal[]>(sucursalesIniciales);
   const [usuarios, setUsuarios] = useState<Usuario[]>(usuariosIniciales);
 
-  // Modal Sucursal
+  // Modal Sucursal (Crear / Editar)
   const [modalSucursalAbierto, setModalSucursalAbierto] = useState(false);
+  const [sucursalEditando, setSucursalEditando] = useState<Sucursal | null>(null);
   const [sucNombre, setSucNombre] = useState('');
   const [sucDireccion, setSucDireccion] = useState('');
   const [sucTelefono, setSucTelefono] = useState('');
   const [guardandoSucursal, setGuardandoSucursal] = useState(false);
+
+  // Modal Confirmar Eliminar Sucursal
+  const [sucursalParaEliminar, setSucursalParaEliminar] = useState<Sucursal | null>(null);
+  const [eliminandoSucursal, setEliminandoSucursal] = useState(false);
 
   // Modal Usuario
   const [modalUsuarioAbierto, setModalUsuarioAbierto] = useState(false);
@@ -53,30 +58,79 @@ export default function OrganizacionManager({
   const [usrActivo, setUsrActivo] = useState(true);
   const [guardandoUsuario, setGuardandoUsuario] = useState(false);
 
-  // Crear Sucursal
-  const handleCrearSucursal = async (e: React.SyntheticEvent) => {
+  // Abrir Modal Crear Sucursal
+  const abrirCrearSucursal = () => {
+    setSucursalEditando(null);
+    setSucNombre('');
+    setSucDireccion('');
+    setSucTelefono('');
+    setModalSucursalAbierto(true);
+  };
+
+  // Abrir Modal Editar Sucursal
+  const abrirEditarSucursal = (s: Sucursal) => {
+    setSucursalEditando(s);
+    setSucNombre(s.nombre);
+    setSucDireccion(s.direccion || '');
+    setSucTelefono(s.telefono || '');
+    setModalSucursalAbierto(true);
+  };
+
+  // Guardar Sucursal (Crear o Editar)
+  const handleGuardarSucursal = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setGuardandoSucursal(true);
 
     const promesa = async () => {
-      const nuevaSuc = await PosService.crearSucursal({
-        nombre: sucNombre.trim(),
-        direccion: sucDireccion.trim(),
-        telefono: sucTelefono.trim(),
-      });
-      setSucursales((prev) => [...prev, nuevaSuc]);
-      setModalSucursalAbierto(false);
-      setSucNombre('');
-      setSucDireccion('');
-      setSucTelefono('');
-      return nuevaSuc;
+      if (sucursalEditando) {
+        const updated = await PosService.actualizarSucursal({
+          id: sucursalEditando.id,
+          nombre: sucNombre.trim(),
+          direccion: sucDireccion.trim(),
+          telefono: sucTelefono.trim(),
+        });
+
+        setSucursales((prev) =>
+          prev.map((s) => (s.id === sucursalEditando.id ? { ...s, ...updated } : s))
+        );
+        setModalSucursalAbierto(false);
+        return updated;
+      } else {
+        const nuevaSuc = await PosService.crearSucursal({
+          nombre: sucNombre.trim(),
+          direccion: sucDireccion.trim(),
+          telefono: sucTelefono.trim(),
+        });
+        setSucursales((prev) => [...prev, nuevaSuc]);
+        setModalSucursalAbierto(false);
+        return nuevaSuc;
+      }
     };
 
     toast.promise(promesa(), {
-      loading: 'Registrando nueva sucursal...',
-      success: 'Sucursal registrada con éxito',
+      loading: sucursalEditando ? 'Guardando cambios de la sucursal...' : 'Registrando nueva sucursal...',
+      success: sucursalEditando ? 'Sucursal actualizada con éxito' : 'Sucursal registrada con éxito',
       error: (err) => err.message,
       finally: () => setGuardandoSucursal(false),
+    });
+  };
+
+  // Eliminar Sucursal
+  const handleEliminarSucursal = async () => {
+    if (!sucursalParaEliminar) return;
+    setEliminandoSucursal(true);
+
+    const promesa = async () => {
+      await PosService.eliminarSucursal(sucursalParaEliminar.id);
+      setSucursales((prev) => prev.filter((s) => s.id !== sucursalParaEliminar.id));
+      setSucursalParaEliminar(null);
+    };
+
+    toast.promise(promesa(), {
+      loading: 'Eliminando sucursal...',
+      success: 'Sucursal procesada con éxito',
+      error: (err) => err.message,
+      finally: () => setEliminandoSucursal(false),
     });
   };
 
@@ -157,7 +211,7 @@ export default function OrganizacionManager({
 
         {tab === 'SUCURSALES' && (
           <button
-            onClick={() => setModalSucursalAbierto(true)}
+            onClick={abrirCrearSucursal}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs font-bold shadow-lg shadow-orange-600/20 transition self-start"
           >
             <Plus className="w-4 h-4" />
@@ -208,16 +262,32 @@ export default function OrganizacionManager({
                   </span>
                   <h3 className="text-base font-bold text-white mt-0.5">{suc.nombre}</h3>
                 </div>
-                <button
-                  onClick={() => handleToggleSucursal(suc.id, suc.activa)}
-                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition ${
-                    suc.activa
-                      ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 hover:bg-emerald-900/60'
-                      : 'bg-rose-950/60 text-rose-400 border border-rose-800/40 hover:bg-rose-900/60'
-                  }`}
-                >
-                  {suc.activa ? 'Operativa' : 'Inactiva'}
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => abrirEditarSucursal(suc)}
+                    className="p-1.5 rounded-lg bg-[#100f0e] border border-[#2b2520] text-[#9c907f] hover:text-white hover:border-amber-600 transition"
+                    title="Editar datos de la sucursal"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setSucursalParaEliminar(suc)}
+                    className="p-1.5 rounded-lg bg-[#100f0e] border border-[#2b2520] text-[#9c907f] hover:text-rose-400 hover:border-rose-800 transition"
+                    title="Eliminar sucursal"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleToggleSucursal(suc.id, suc.activa)}
+                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition ${
+                      suc.activa
+                        ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 hover:bg-emerald-900/60'
+                        : 'bg-rose-950/60 text-rose-400 border border-rose-800/40 hover:bg-rose-900/60'
+                    }`}
+                  >
+                    {suc.activa ? 'Operativa' : 'Inactiva'}
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-2 text-xs text-[#9c907f] border-t border-[#26211c] pt-3">
@@ -303,7 +373,7 @@ export default function OrganizacionManager({
         </div>
       )}
 
-      {/* Modal Nueva Sucursal */}
+      {/* Modal Crear / Editar Sucursal */}
       <AnimatePresence>
         {modalSucursalAbierto && (
           <motion.div
@@ -319,7 +389,9 @@ export default function OrganizacionManager({
               className="bg-[#181614] border border-[#2e2721] rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl"
             >
               <div className="flex justify-between items-center">
-                <h3 className="text-base font-bold text-white">Nueva Sucursal</h3>
+                <h3 className="text-base font-bold text-white">
+                  {sucursalEditando ? 'Editar Sucursal' : 'Nueva Sucursal'}
+                </h3>
                 <button
                   onClick={() => setModalSucursalAbierto(false)}
                   className="text-[#7a6f5f] hover:text-white"
@@ -328,7 +400,7 @@ export default function OrganizacionManager({
                 </button>
               </div>
 
-              <form onSubmit={handleCrearSucursal} className="space-y-3.5">
+              <form onSubmit={handleGuardarSucursal} className="space-y-3.5">
                 <div>
                   <label className="text-xs text-[#ede7dc]">Nombre de la Sucursal</label>
                   <input
@@ -365,14 +437,76 @@ export default function OrganizacionManager({
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={guardandoSucursal}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs transition"
-                >
-                  {guardandoSucursal ? 'Registrando...' : 'Crear Sucursal'}
-                </button>
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setModalSucursalAbierto(false)}
+                    className="w-1/2 py-2.5 rounded-xl bg-[#26211c] hover:bg-[#332c25] text-[#ede7dc] font-semibold text-xs transition"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={guardandoSucursal}
+                    className="w-1/2 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-lg shadow-orange-600/20 transition"
+                  >
+                    {guardandoSucursal
+                      ? 'Guardando...'
+                      : sucursalEditando
+                      ? 'Actualizar Sucursal'
+                      : 'Crear Sucursal'}
+                  </button>
+                </div>
               </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal Confirmar Eliminar Sucursal */}
+      <AnimatePresence>
+        {sucursalParaEliminar && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.94, opacity: 0 }}
+              className="bg-[#181614] border border-[#2e2721] rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl text-center"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-rose-950/60 border border-rose-800/40 text-rose-400 flex items-center justify-center mx-auto">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+
+              <div>
+                <h3 className="text-base font-bold text-white">¿Eliminar Sucursal?</h3>
+                <p className="text-xs text-[#9c907f] mt-1.5">
+                  Estás a punto de eliminar <strong className="text-white">{sucursalParaEliminar.nombre}</strong>. Si tiene pedidos o turnos registrados, será deshabilitada para proteger los registros de auditoría.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSucursalParaEliminar(null)}
+                  disabled={eliminandoSucursal}
+                  className="w-1/2 py-2.5 rounded-xl bg-[#26211c] hover:bg-[#332c25] text-[#ede7dc] font-semibold text-xs transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEliminarSucursal}
+                  disabled={eliminandoSucursal}
+                  className="w-1/2 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-600/20 transition"
+                >
+                  {eliminandoSucursal ? 'Eliminando...' : 'Sí, Eliminar'}
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

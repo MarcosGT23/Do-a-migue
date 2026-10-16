@@ -224,9 +224,36 @@ export const PosService = {
     // 3. GESTIÓN DE CATÁLOGO (CATEGORÍAS Y PRODUCTOS TERMINADOS)
     // ==========================================================================
     async crearCategoria(params: { nombre: string; descripcion: string; orden: number }) {
-        const { data, error } = await supabase.from('categorias').insert(params).select().single();
-        if (error) throw new Error(error.message);
-        return data;
+        const res = await fetch('/api/catalogo/categorias', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error || 'Error al crear categoría');
+        return json.data;
+    },
+
+    async actualizarCategoria(params: { id: number; nombre?: string; descripcion?: string; orden?: number; activa?: boolean }) {
+        const res = await fetch('/api/catalogo/categorias', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error || 'Error al actualizar categoría');
+        return json.data;
+    },
+
+    async eliminarCategoria(id: number) {
+        const res = await fetch('/api/catalogo/categorias', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error || 'Error al eliminar categoría');
+        return json;
     },
 
     async guardarProducto(params: {
@@ -238,41 +265,66 @@ export const PosService = {
         imagen_url?: string;
         activo: boolean;
     }) {
-        if (params.id) {
-            const { data, error } = await supabase
-                .from('productos')
-                .update({
-                    categoria_id: params.categoria_id,
-                    nombre: params.nombre,
-                    descripcion: params.descripcion,
-                    precio_base: params.precio_base,
-                    imagen_url: params.imagen_url || null,
-                    activo: params.activo,
-                })
-                .eq('id', params.id)
-                .select()
-                .single();
-            if (error) throw new Error(error.message);
-            return data;
-        } else {
-            const { data, error } = await supabase.from('productos').insert(params).select().single();
-            if (error) throw new Error(error.message);
-            return data;
-        }
+        const method = params.id ? 'PUT' : 'POST';
+        const res = await fetch('/api/catalogo/productos', {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error || 'Error al guardar plato');
+        return json.data;
+    },
+
+    async eliminarProducto(id: number) {
+        const res = await fetch('/api/catalogo/productos', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error || 'Error al eliminar plato');
+        return json;
     },
 
     // ==========================================================================
     // 4. GESTIÓN DE SUCURSALES Y USUARIOS
     // ==========================================================================
     async crearSucursal(params: { nombre: string; direccion: string; telefono: string }) {
-        const { data, error } = await supabase.from('sucursales').insert(params).select().single();
-        if (error) throw new Error(error.message);
-        return data;
+        const res = await fetch('/api/organizacion/sucursales', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error || 'Error al crear sucursal');
+        return json.data;
+    },
+
+    async actualizarSucursal(params: { id: number; nombre?: string; direccion?: string; telefono?: string; activa?: boolean }) {
+        const res = await fetch('/api/organizacion/sucursales', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error || 'Error al actualizar sucursal');
+        return json.data;
+    },
+
+    async eliminarSucursal(id: number) {
+        const res = await fetch('/api/organizacion/sucursales', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error || 'Error al eliminar sucursal');
+        return json;
     },
 
     async toggleSucursalActiva(id: number, activa: boolean) {
-        const { error } = await supabase.from('sucursales').update({ activa }).eq('id', id);
-        if (error) throw new Error(error.message);
+        return this.actualizarSucursal({ id, activa });
     },
 
     async actualizarUsuario(params: {
