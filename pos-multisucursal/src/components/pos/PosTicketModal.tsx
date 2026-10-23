@@ -1,7 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Printer, X, Check, Flame, Receipt, RotateCw } from 'lucide-react';
+import { Printer, Check, RotateCw, Receipt, X } from 'lucide-react';
+import { etiquetasCortes, limpiarNotas, type TipoCorte } from '../../core/tiposCorte';
+import { Button } from '../ui/Button';
+import { IconButton } from '../ui/IconButton';
 
 export interface TicketItem {
   nombre: string;
@@ -10,6 +13,8 @@ export interface TicketItem {
   subtotal: number;
   descuento_item?: number;
   notas?: string;
+  /** Cortes elegidos para este producto (carnes). */
+  tipo_corte?: TipoCorte[] | null;
 }
 
 export interface TicketData {
@@ -18,7 +23,8 @@ export interface TicketData {
   sucursalNombre: string;
   cajeroNombre: string;
   clienteNombre: string;
-  numeroMesa?: number | null;
+  /** Ficha del turno (se reinicia en cada caja abierta). */
+  numeroFicha?: number | null;
   fecha: Date | string;
   items: TicketItem[];
   subtotal: number;
@@ -36,7 +42,11 @@ interface PosTicketModalProps {
   autoPrint?: boolean;
 }
 
-// Subcomponente reutilizable con la estructura visual del ticket en negro fuerte y acentos
+/**
+ * Contenido del ticket. Se usa igual en pantalla y en el portal de impresión
+ * térmica, por eso todo va en negro puro sobre blanco: la impresora es de una
+ * sola tinta y cualquier color se convierte en gris tramado (ilegible).
+ */
 function ContenidoTicket({
   ticket,
   fechaFormateada,
@@ -47,113 +57,130 @@ function ContenidoTicket({
   pedidoIdStr: string;
 }) {
   return (
-    <>
-      {/* Cabecera Tradicional Doña Migue Centrada con Color */}
-      <div className="text-center pb-2 border-b-2 border-dashed border-stone-400 space-y-1 m-0 p-0">
-        <div className="flex items-center justify-center gap-1.5 font-black text-sm tracking-tight text-amber-600 uppercase">
-          <Flame className="w-4 h-4 text-orange-500 fill-orange-500 inline-block" />
-          <span className="text-black font-black">DOÑA MIGUE</span>
-        </div>
-        <p className="text-[10px] text-black font-sans tracking-wide uppercase font-black">
+    <div className="text-[11px] leading-tight text-black">
+      <div className="pb-2 text-center">
+        <p className="text-[15px] font-black uppercase leading-none tracking-[0.08em]">Doña Migue</p>
+        <p className="mt-1 text-[9.5px] font-bold uppercase tracking-[0.06em]">
           {ticket.sucursalNombre}
         </p>
-        <div className="flex items-center justify-center gap-1.5 pt-0.5 text-[10px]">
-          <span className="font-black text-black bg-stone-100 px-2 py-0.5 rounded border border-stone-400">
-            COMANDA #{pedidoIdStr}
-          </span>
-          {ticket.aperturaCajaId && (
-            <span className="text-black font-bold">Turno #{ticket.aperturaCajaId}</span>
-          )}
+      </div>
+
+      <div className="flex justify-center pb-2">
+        <div className="border-[1.5px] border-black px-2 py-0.5 text-center">
+          <p className="text-[8.5px] font-bold uppercase tracking-[0.18em]">
+            {ticket.numeroFicha ? 'Ficha' : 'Comanda'}
+          </p>
+          <p className="font-mono text-[20px] font-black leading-none tracking-tight">
+            {ticket.numeroFicha ? `#${String(ticket.numeroFicha).padStart(3, '0')}` : `#${pedidoIdStr}`}
+          </p>
         </div>
       </div>
 
-      {/* Metadatos de la Orden en Negro Fuerte */}
-      <div className="space-y-1 text-[11px] pb-2 border-b border-dashed border-stone-400 text-black">
-        <div className="flex justify-between items-center gap-2">
-          <span className="text-black font-bold">Cliente:</span>
-          <span className="font-black text-black uppercase break-words text-right flex-1">
+      <div className="border-y border-dashed border-black py-1.5">
+        <p className="flex justify-between gap-2">
+          <span className="font-bold">Comanda</span>
+          <span className="font-mono font-black">#{pedidoIdStr}</span>
+        </p>
+        <p className="flex justify-between gap-2">
+          <span className="font-bold">Cliente</span>
+          <span className="max-w-[62%] break-words text-right font-black uppercase">
             {ticket.clienteNombre}
           </span>
-        </div>
-        <div className="flex justify-between items-center gap-2">
-          <span className="text-black font-bold">Ubicación:</span>
-          <span className="font-black px-2 py-0.5 rounded bg-amber-100 text-black border border-amber-400 text-[10px]">
-            {ticket.numeroMesa ? `MESA #${ticket.numeroMesa}` : 'MOSTRADOR / LLEVAR'}
-          </span>
-        </div>
-        <div className="flex justify-between items-center text-[10px] text-black font-bold pt-0.5">
-          <span>{fechaFormateada}</span>
-          <span>Cajero: {ticket.cajeroNombre || 'Cajero'}</span>
-        </div>
-      </div>
-
-      {/* Detalle de Productos en Negro Fuerte */}
-      <div className="pt-1 pb-2 border-b border-dashed border-stone-400 space-y-1.5 text-black">
-        {(ticket.items || []).map((det, idx) => (
-          <div key={idx} className="space-y-0.5">
-            <div className="flex justify-between items-start text-[11px] gap-2 leading-tight">
-              <span className="font-bold flex-1 break-words text-black">
-                <strong className="text-black font-black">{det.cantidad}x</strong> {det.nombre}
-              </span>
-              <span className="font-black whitespace-nowrap tabular-nums text-right text-black">
-                Bs {Number(det.subtotal).toFixed(2)}
-              </span>
-            </div>
-            {det.notas && (
-              <p className="text-[9.5px] text-amber-800 italic pl-3 leading-none font-bold">
-                • {det.notas}
-              </p>
-            )}
-            {det.descuento_item && det.descuento_item > 0 ? (
-              <p className="text-[9.5px] text-rose-700 pl-3 leading-none font-bold">
-                Desc: -Bs {Number(det.descuento_item).toFixed(2)}
-              </p>
-            ) : null}
-          </div>
-        ))}
-      </div>
-
-      {/* Totales y Métodos de Pago en Negro Fuerte */}
-      <div className="space-y-1.5 text-[11px] pt-1 text-black">
-        <div className="flex justify-between text-black font-bold">
-          <span>Subtotal:</span>
-          <span className="tabular-nums font-black">Bs {Number(ticket.subtotal).toFixed(2)}</span>
-        </div>
-        {Number(ticket.descuento) > 0 && (
-          <div className="flex justify-between text-rose-700 font-bold">
-            <span>Descuento:</span>
-            <span className="tabular-nums font-black">-Bs {Number(ticket.descuento).toFixed(2)}</span>
-          </div>
+        </p>
+        <p className="flex justify-between gap-2">
+          <span className="font-bold">Cajero</span>
+          <span className="text-right">{ticket.cajeroNombre || 'Cajero'}</span>
+        </p>
+        <p className="flex justify-between gap-2">
+          <span className="font-bold">Fecha</span>
+          <span className="text-right">{fechaFormateada}</span>
+        </p>
+        {ticket.aperturaCajaId && (
+          <p className="flex justify-between gap-2">
+            <span className="font-bold">Turno</span>
+            <span className="text-right">Caja #{ticket.aperturaCajaId}</span>
+          </p>
         )}
-        {/* Bloque TOTAL con fondo amber tenue y texto negro fuerte */}
-        <div className="flex justify-between items-center font-black p-2 rounded-lg bg-amber-50 border border-amber-400 text-black my-1">
-          <span className="tracking-wide text-xs text-black font-black">TOTAL:</span>
-          <span className="text-base text-black font-black tabular-nums">
+      </div>
+
+      <div className="space-y-1.5 border-b border-dashed border-black py-2">
+        {(ticket.items || []).map((det, idx) => {
+          const notaLimpia = limpiarNotas(det.notas);
+          return (
+            <div key={idx}>
+              <div className="flex items-start justify-between gap-2">
+                <span className="min-w-0 flex-1 break-words font-bold">
+                  <span className="font-black">{det.cantidad}x</span> {det.nombre}
+                </span>
+                <span className="shrink-0 font-mono font-black tabular-nums">
+                  {Number(det.subtotal).toFixed(2)}
+                </span>
+              </div>
+              {det.tipo_corte && det.tipo_corte.length > 0 && (
+                <p className="pl-2.5 text-[9.5px] font-black uppercase leading-tight">
+                  {det.tipo_corte.length > 1 ? 'Cortes' : 'Corte'}:{' '}
+                  {etiquetasCortes(det.tipo_corte)}
+                </p>
+              )}
+              {notaLimpia && (
+                <p className="pl-2.5 text-[9.5px] italic leading-tight">» {notaLimpia}</p>
+              )}
+              {det.descuento_item && det.descuento_item > 0 ? (
+                <p className="pl-2.5 font-mono text-[9.5px] font-bold leading-tight">
+                  Desc. -{Number(det.descuento_item).toFixed(2)}
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="space-y-1 pt-1.5">
+        <p className="flex justify-between gap-2">
+          <span className="font-bold">Subtotal</span>
+          <span className="font-mono tabular-nums">{Number(ticket.subtotal).toFixed(2)}</span>
+        </p>
+        {Number(ticket.descuento) > 0 && (
+          <p className="flex justify-between gap-2">
+            <span className="font-bold">Descuento</span>
+            <span className="font-mono tabular-nums">
+              -{Number(ticket.descuento).toFixed(2)}
+            </span>
+          </p>
+        )}
+        <div className="flex items-baseline justify-between gap-2 border-y-2 border-black py-1.5">
+          <span className="text-[12px] font-black uppercase tracking-wide">Total</span>
+          <span className="font-mono text-[17px] font-black tabular-nums">
             Bs {Number(ticket.total).toFixed(2)}
           </span>
         </div>
-        <div className="flex justify-between items-center text-[10px] text-black font-bold pt-0.5">
-          <span>Método de Pago:</span>
-          <span className="font-black uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-950 border border-emerald-400 text-[10px]">
-            {ticket.metodoPago || 'EFECTIVO'}
-          </span>
-        </div>
+        <p className="flex justify-between gap-2 pt-1">
+          <span className="font-bold">Pago</span>
+          <span className="font-black uppercase">{ticket.metodoPago || 'EFECTIVO'}</span>
+        </p>
         {ticket.metodoPago === 'EFECTIVO' && ticket.efectivoRecibido !== undefined && (
-          <div className="flex justify-between text-[10px] text-black font-bold pt-1 border-t border-dotted border-stone-400">
-            <span>Recibido: Bs {Number(ticket.efectivoRecibido).toFixed(2)}</span>
-            <span className="font-black text-black">
-              Cambio: Bs {Number(ticket.cambio || 0).toFixed(2)}
-            </span>
-          </div>
+          <>
+            <p className="flex justify-between gap-2">
+              <span className="font-bold">Recibido</span>
+              <span className="font-mono tabular-nums">
+                {Number(ticket.efectivoRecibido).toFixed(2)}
+              </span>
+            </p>
+            <p className="flex justify-between gap-2">
+              <span className="font-bold">Cambio</span>
+              <span className="font-mono font-black tabular-nums">
+                {Number(ticket.cambio || 0).toFixed(2)}
+              </span>
+            </p>
+          </>
         )}
       </div>
 
-      {/* Pie de Página en Negro Fuerte */}
-      <div className="text-center pt-2 text-[10px] text-black border-t border-dashed border-stone-400 space-y-0.5">
-        <p className="font-black text-black">¡Gracias por su preferencia!</p>
-        <p className="text-[9px] text-black font-bold">Doña Migue • Sabor Tradicional a las Brasas</p>
+      <div className="space-y-0.5 border-t border-dashed border-black pt-2 text-center">
+        <p className="text-[10px] font-black uppercase">¡Gracias por su preferencia!</p>
+        <p className="text-[9px]">Doña Migue · Sabor tradicional a las brasas</p>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -262,154 +289,65 @@ export default function PosTicketModal({
 
   return (
     <>
-      {/* 🖨️ Reglas de Impresión Incrustadas Directamente (Cero margen superior a 0mm) */}
-      <style>{`
-        #ticket-termico-impresion-portal {
-          display: none !important;
-        }
-
-        @media print {
-          @page {
-            size: 80mm 297mm;
-            margin: 0mm !important;
-          }
-
-          *, *::before, *::after {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-
-          html, body {
-            background: #ffffff !important;
-            color: #000000 !important;
-            margin: 0mm !important;
-            padding: 0mm !important;
-            width: 100% !important;
-            height: auto !important;
-            min-height: 0 !important;
-            overflow: visible !important;
-          }
-
-          /* Oculta toda la aplicación para que no ocupe espacio de flujo */
-          body > * {
-            display: none !important;
-          }
-
-          /* Único elemento visible en la página impreso en la coordenada top: 0mm */
-          body > #ticket-termico-impresion-portal {
-            display: block !important;
-            visibility: visible !important;
-            position: absolute !important;
-            top: 0mm !important;
-            left: 0mm !important;
-            right: 0mm !important;
-            margin: 0 auto !important;
-            margin-top: 0mm !important;
-            padding: 0mm 2.5mm 3mm 2.5mm !important;
-            padding-top: 0mm !important;
-            background: #ffffff !important;
-            box-sizing: border-box !important;
-            font-family: 'Courier New', Courier, monospace !important;
-            box-shadow: none !important;
-            border: none !important;
-          }
-
-          body > #ticket-termico-impresion-portal * {
-            visibility: visible !important;
-          }
-
-          #ticket-termico-impresion-portal > *:first-child {
-            margin-top: 0mm !important;
-            padding-top: 0mm !important;
-          }
-
-          .ticket-ancho-80mm {
-            width: 72mm !important;
-            max-width: 72mm !important;
-            font-size: 11px !important;
-            line-height: 1.25 !important;
-          }
-
-          .ticket-ancho-58mm {
-            width: 48mm !important;
-            max-width: 48mm !important;
-            font-size: 9.5px !important;
-            line-height: 1.15 !important;
-          }
-
-          .no-print {
-            display: none !important;
-          }
-        }
-      `}</style>
-
-      {/* 1. MODAL VISUAL EN PANTALLA (Marcado como no-print para que no afecte la impresión) */}
+      {/* Modal en pantalla (no se imprime) */}
       <AnimatePresence>
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto no-print">
+        <div className="no-print fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto bg-sunken/85 p-3 backdrop-blur-sm sm:items-center sm:p-4">
           <motion.div
-            initial={{ scale: 0.94, opacity: 0, y: 10 }}
+            initial={{ scale: 0.96, opacity: 0, y: 10 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.94, opacity: 0, y: 10 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="bg-[#181614] border border-[#332b24] rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-2xl text-[#ede7dc] relative"
+            exit={{ scale: 0.96, opacity: 0, y: 10 }}
+            transition={{ duration: 0.18, ease: [0.22, 0.61, 0.36, 1] }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Comprobante de venta"
+            className="relative w-full max-w-sm space-y-3.5 rounded-panel border border-line-strong bg-chrome p-4 text-ink shadow-pop"
           >
-            {/* Header del Modal */}
-            <div className="flex justify-between items-center pb-2.5 border-b border-[#29221b]">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500">
-                  <Receipt className="w-3.5 h-3.5" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-                    Comprobante de Venta
-                  </h3>
-                  <p className="text-[10px] text-[#9e9382]">Comanda #{pedidoIdStr}</p>
+            <div className="flex items-start justify-between gap-2 border-b border-line pb-3">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-[9px] border border-ember/30 bg-ember/10 text-ember">
+                  <Receipt className="size-4" strokeWidth={2.25} />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="text-[13.5px] font-bold leading-tight text-ink">Comprobante</h3>
+                  <p className="truncate text-[11px] text-ink-muted">
+                    {ticket.numeroFicha
+                      ? `Ficha #${ticket.numeroFicha} · Comanda #${pedidoIdStr}`
+                      : `Comanda #${pedidoIdStr}`}
+                  </p>
                 </div>
               </div>
 
-              {/* Selector de Ancho: 80mm / 58mm */}
-              <div className="flex items-center gap-1 bg-[#100f0e] p-0.5 rounded-lg border border-[#2b2520]">
-                <button
-                  type="button"
-                  onClick={() => cambiarAnchoPapel('80mm')}
-                  className={`px-2 py-0.5 text-[10px] font-bold rounded cursor-pointer transition ${
-                    anchoPapel === '80mm'
-                      ? 'bg-amber-600 text-white'
-                      : 'text-[#877c6c] hover:text-[#ded5c6]'
-                  }`}
-                  title="Imprimir en rollo 80mm"
-                >
-                  80mm
-                </button>
-                <button
-                  type="button"
-                  onClick={() => cambiarAnchoPapel('58mm')}
-                  className={`px-2 py-0.5 text-[10px] font-bold rounded cursor-pointer transition ${
-                    anchoPapel === '58mm'
-                      ? 'bg-amber-600 text-white'
-                      : 'text-[#877c6c] hover:text-[#ded5c6]'
-                  }`}
-                  title="Imprimir en rollo 58mm"
-                >
-                  58mm
-                </button>
-
-                <button
+              <div className="flex shrink-0 items-center gap-1">
+                <div className="flex items-center gap-0.5 rounded-[8px] border border-line bg-sunken p-0.5">
+                  {(['80mm', '58mm'] as const).map((ancho) => (
+                    <button
+                      key={ancho}
+                      type="button"
+                      onClick={() => cambiarAnchoPapel(ancho)}
+                      aria-pressed={anchoPapel === ancho}
+                      className={`rounded-[6px] px-1.5 py-1 font-mono text-[10px] font-bold transition-colors ${
+                        anchoPapel === ancho
+                          ? 'bg-ember-strong text-white'
+                          : 'text-ink-muted hover:text-ink'
+                      }`}
+                    >
+                      {ancho}
+                    </button>
+                  ))}
+                </div>
+                <IconButton
+                  etiqueta="Cerrar (Esc)"
                   onClick={onClose}
-                  className="w-6 h-6 ml-1 rounded bg-[#24201c] hover:bg-[#2f2a24] text-[#9e9382] hover:text-white flex items-center justify-center transition cursor-pointer"
-                  title="Cerrar (Esc)"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                  tamano="sm"
+                  icono={<X className="size-4" strokeWidth={2.25} />}
+                />
               </div>
             </div>
 
-            {/* Vista Previa del Ticket en Pantalla */}
+            {/* Vista previa: el mismo componente que se imprime */}
             <div
-              className={`p-4 bg-white text-black font-mono rounded-xl space-y-2.5 text-xs shadow-inner border border-stone-300 mx-auto transition-all box-border ${
-                anchoPapel === '58mm'
-                  ? 'max-w-[215px] text-[10px]'
-                  : 'max-w-[285px] text-[11px]'
+              className={`mx-auto box-border rounded-[4px] bg-white p-3.5 font-mono text-black shadow-[0_10px_30px_-16px_rgba(0,0,0,0.9)] transition-[max-width] duration-200 ${
+                anchoPapel === '58mm' ? 'max-w-[212px]' : 'max-w-[292px]'
               }`}
             >
               <ContenidoTicket
@@ -419,71 +357,67 @@ export default function PosTicketModal({
               />
             </div>
 
-            {/* Opciones y Configuración de Impresión */}
-            <div className="pt-1 space-y-3">
-              <div className="flex items-center justify-between px-0.5 text-xs text-[#9e9382]">
-                <label
-                  onClick={toggleAutoImprimir}
-                  className="flex items-center gap-1.5 cursor-pointer select-none hover:text-[#ede7dc] transition"
-                >
-                  <input
-                    type="checkbox"
-                    checked={autoImprimir}
-                    onChange={toggleAutoImprimir}
-                    className="rounded border-[#332b24] bg-[#24201c] text-amber-500 focus:ring-amber-500/30 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span className="text-[10px]">Impresión automática al cobrar</span>
-                </label>
+            <div className="space-y-2.5">
+              <label className="flex cursor-pointer select-none items-center gap-2 text-[11.5px] text-ink-soft transition-colors hover:text-ink">
+                <input
+                  type="checkbox"
+                  checked={autoImprimir}
+                  onChange={toggleAutoImprimir}
+                  className="size-4 cursor-pointer rounded border-line-strong bg-raised accent-ember-strong focus-visible:ring-2 focus-visible:ring-ember/40"
+                />
+                Impresión automática al cobrar
+              </label>
 
-                <span className="text-[9px] text-[#685f52]">Enter: Imprimir | Esc: Salir</span>
-              </div>
-
-              {/* Botones de Acción */}
               <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
+                <Button
+                  variante="primaria"
                   onClick={ejecutarImpresion}
                   disabled={imprimiendo}
-                  className="py-2.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-500 active:scale-[0.98] text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-900/30 transition cursor-pointer"
+                  icono={
+                    imprimiendo ? (
+                      <RotateCw className="size-4 animate-spin" strokeWidth={2.25} />
+                    ) : (
+                      <Printer className="size-4" strokeWidth={2.25} />
+                    )
+                  }
                 >
-                  {imprimiendo ? (
-                    <RotateCw className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Printer className="w-3.5 h-3.5" />
-                  )}
-                  <span>Imprimir ({anchoPapel})</span>
-                </button>
-
-                <button
-                  type="button"
+                  Imprimir
+                </Button>
+                <Button
+                  variante="secundaria"
                   onClick={onClose}
-                  className="py-2.5 px-3 rounded-xl bg-[#24201c] hover:bg-[#302b25] active:scale-[0.98] text-[#ede7dc] font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer border border-[#382f25]"
+                  icono={<Check className="size-4 text-ok" strokeWidth={2.5} />}
                 >
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Siguiente Venta</span>
-                </button>
+                  Siguiente
+                </Button>
               </div>
+
+              <p className="text-center text-[10.5px] text-ink-faint">
+                Enter imprime · Esc cierra
+              </p>
             </div>
           </motion.div>
         </div>
       </AnimatePresence>
 
-      {/* 2. CONTENEDOR EXCLUSIVO DE IMPRESIÓN DIRECTO EN BODY (CERO espacio superior en papel 80x297mm) */}
-      {isMounted && typeof document !== 'undefined' && createPortal(
-        <div
-          id="ticket-termico-impresion-portal"
-          className={`bg-white text-black font-mono box-border p-0 m-0 ${
-            anchoPapel === '58mm' ? 'ticket-ancho-58mm' : 'ticket-ancho-80mm'
-          }`}
-        >
-          <ContenidoTicket
-            ticket={ticket}
-            fechaFormateada={fechaFormateada}
-            pedidoIdStr={pedidoIdStr}
-          />
-        </div>,
-        document.body
-      )}
+      {/* Portal exclusivo de impresión térmica (reglas en global.css) */}
+      {isMounted &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            id="ticket-termico-impresion-portal"
+            className={`m-0 box-border bg-white p-0 font-mono text-black ${
+              anchoPapel === '58mm' ? 'ticket-ancho-58mm' : 'ticket-ancho-80mm'
+            }`}
+          >
+            <ContenidoTicket
+              ticket={ticket}
+              fechaFormateada={fechaFormateada}
+              pedidoIdStr={pedidoIdStr}
+            />
+          </div>,
+          document.body
+        )}
     </>
   );
 }

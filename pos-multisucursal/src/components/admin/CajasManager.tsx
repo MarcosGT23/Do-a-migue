@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
 import {
-  Search, CheckCircle2,
-  AlertTriangle, Clock, ArrowDownLeft, ArrowUpRight
+  Search, CheckCircle2, AlertTriangle, Clock,
+  ArrowDownLeft, ArrowUpRight, X,
 } from 'lucide-react';
+import { Badge } from '../ui/Badge';
 
 interface CajaAuditoria {
   id: number;
@@ -21,6 +22,20 @@ interface CajaAuditoria {
 
 interface Props {
   cajas: CajaAuditoria[];
+}
+
+const FILTROS = [
+  { id: 'TODAS', label: 'Todos' },
+  { id: 'ABIERTA', label: 'En curso' },
+  { id: 'CERRADA', label: 'Cerrados' },
+] as const;
+
+function fechaCorta(iso: string) {
+  const d = new Date(iso);
+  return `${d.toLocaleDateString([], { day: '2-digit', month: 'short' })} · ${d.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  })}`;
 }
 
 export default function CajasManager({ cajas }: Props) {
@@ -43,191 +58,309 @@ export default function CajasManager({ cajas }: Props) {
   ).length;
 
   return (
-    <div className="p-8 space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
+      {/* Cabecera */}
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <span className="text-xs font-semibold text-amber-500 uppercase tracking-wide">
-            Control de Arqueos y Cierres
-          </span>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight mt-0.5">
-            Auditoría de Cajas
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-ember">
+            Control de arqueos y cierres
+          </p>
+          <h1 className="mt-1 text-[22px] font-extrabold leading-tight tracking-[-0.025em] text-ink sm:text-[26px]">
+            Auditoría de cajas
           </h1>
-          <p className="text-xs text-[#9c907f] mt-1">
-            Supervisión estricta de turnos, arqueos ciegos y diferencias de efectivo vs digital.
+          <p className="mt-1 max-w-xl text-[12.5px] leading-5 text-ink-muted">
+            Turnos, arqueos ciegos y diferencias entre lo declarado y lo registrado por el sistema.
           </p>
         </div>
 
-        {/* Métricas Rápidas */}
-        <div className="flex items-center gap-3">
-          <div className="px-4 py-2.5 rounded-2xl bg-[#1a1715] border border-[#2b2520] flex items-center gap-3 text-xs">
-            <div className="p-1.5 rounded-lg bg-emerald-950/60 border border-emerald-800/40 text-emerald-400">
-              <Clock className="w-4 h-4" />
-            </div>
+        <div className="flex gap-2">
+          <div className="flex items-center gap-2.5 rounded-card border border-line-strong bg-card px-3 py-2">
+            <Clock className="size-4 text-ok" strokeWidth={2.25} aria-hidden />
             <div>
-              <span className="text-[#8c806f] block text-[10px]">Cajas en Operación</span>
-              <span className="font-bold text-white num-tabular">{totalCajasAbiertas} activas</span>
+              <span className="block text-[10px] uppercase tracking-[0.07em] text-ink-muted">
+                En operación
+              </span>
+              <span className="font-mono text-[13px] font-bold text-ink tnum">
+                {totalCajasAbiertas} {totalCajasAbiertas === 1 ? 'activa' : 'activas'}
+              </span>
             </div>
           </div>
-          <div className="px-4 py-2.5 rounded-2xl bg-[#1a1715] border border-[#2b2520] flex items-center gap-3 text-xs">
-            <div className="p-1.5 rounded-lg bg-amber-950/60 border border-amber-800/40 text-amber-400">
-              <AlertTriangle className="w-4 h-4" />
-            </div>
+          <div className="flex items-center gap-2.5 rounded-card border border-line-strong bg-card px-3 py-2">
+            <AlertTriangle
+              className={`size-4 ${totalDiferenciasNegativas > 0 ? 'text-warn' : 'text-ink-faint'}`}
+              strokeWidth={2.25}
+              aria-hidden
+            />
             <div>
-              <span className="text-[#8c806f] block text-[10px]">Descuadres Reportados</span>
-              <span className="font-bold text-amber-400 num-tabular">{totalDiferenciasNegativas} turnos</span>
+              <span className="block text-[10px] uppercase tracking-[0.07em] text-ink-muted">
+                Descuadres
+              </span>
+              <span
+                className={`font-mono text-[13px] font-bold tnum ${
+                  totalDiferenciasNegativas > 0 ? 'text-warn' : 'text-ink'
+                }`}
+              >
+                {totalDiferenciasNegativas} {totalDiferenciasNegativas === 1 ? 'turno' : 'turnos'}
+              </span>
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Filtros */}
-      <div className="flex flex-col sm:flex-row items-center gap-4 bg-[#1a1715] border border-[#2b2520] p-4 rounded-2xl">
-        <div className="relative flex-1 w-full">
-          <Search className="w-4 h-4 text-[#7a6f5f] absolute left-3.5 top-1/2 -translate-y-1/2" />
+      <div className="mt-5 flex flex-col gap-2.5 rounded-card border border-line-strong bg-card p-3 sm:flex-row sm:items-center">
+        <div className="relative min-w-0 flex-1">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted"
+            strokeWidth={2}
+            aria-hidden
+          />
+          <label htmlFor="cajas-busqueda" className="sr-only">
+            Buscar caja
+          </label>
           <input
-            type="text"
+            id="cajas-busqueda"
+            type="search"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por cajero o número de turno..."
-            className="w-full pl-10 pr-4 py-2 bg-[#100f0e] border border-[#2b2520] rounded-xl text-xs text-white placeholder-[#6e6355] focus:outline-none focus:border-amber-600 transition"
+            placeholder="Buscar por cajero o número de turno"
+            className="h-10 w-full rounded-field border border-line-strong bg-sunken pl-9 pr-8 text-[13.5px] text-ink placeholder:text-ink-faint transition-colors hover:border-control focus-visible:border-ember focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember/25 [&::-webkit-search-cancel-button]:hidden"
           />
+          {busqueda && (
+            <button
+              type="button"
+              onClick={() => setBusqueda('')}
+              aria-label="Limpiar búsqueda"
+              className="absolute right-2 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-ink-muted hover:bg-raised hover:text-ink"
+            >
+              <X className="size-3.5" strokeWidth={2.5} />
+            </button>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
-          {(['TODAS', 'ABIERTA', 'CERRADA'] as const).map((estado) => (
+        <div className="flex shrink-0 items-center gap-0.5 rounded-field border border-line bg-sunken p-0.5">
+          {FILTROS.map(({ id, label }) => (
             <button
-              key={estado}
-              onClick={() => setFiltroEstado(estado)}
-              className={`px-3 py-2 rounded-xl text-xs font-semibold transition ${
-                filtroEstado === estado
-                  ? 'bg-amber-600/20 text-amber-300 border border-amber-600/40'
-                  : 'text-[#9c907f] hover:text-white bg-[#100f0e]'
+              key={id}
+              type="button"
+              onClick={() => setFiltroEstado(id)}
+              aria-pressed={filtroEstado === id}
+              className={`h-9 flex-1 rounded-[7px] px-3 text-[12.5px] font-semibold transition-colors sm:flex-none ${
+                filtroEstado === id
+                  ? 'bg-raised text-ink shadow-sm'
+                  : 'text-ink-muted hover:text-ink'
               }`}
             >
-              {estado === 'TODAS' ? 'Todos' : estado === 'ABIERTA' ? 'En Curso' : 'Cerrados'}
+              {label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Tabla de Auditoría */}
-      <div className="bg-[#1a1715] border border-[#2b2520] rounded-2xl overflow-hidden shadow-xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-[#29231e] text-[#8c806f] uppercase tracking-wider bg-[#141210]">
-                <th className="py-3 px-4 font-semibold">Turno / Cajero</th>
-                <th className="py-3 px-4 font-semibold">Fondo Inicial</th>
-                <th className="py-3 px-4 font-semibold">Efectivo Sistema vs Declarado</th>
-                <th className="py-3 px-4 font-semibold">Digital Sistema vs Declarado</th>
-                <th className="py-3 px-4 font-semibold">Diferencia</th>
-                <th className="py-3 px-4 font-semibold">Estado</th>
-                <th className="py-3 px-4 font-semibold">Fecha Apertura</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#26211c]">
-              {cajasFiltradas.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-[#6e6355]">
-                    No hay turnos registrados con este criterio.
-                  </td>
+      {/* Listado */}
+      <section className="mt-3 overflow-hidden rounded-card border border-line-strong bg-card">
+        {cajasFiltradas.length === 0 ? (
+          <p className="px-4 py-12 text-center text-[12.5px] text-ink-faint">
+            No hay turnos registrados con este criterio.
+          </p>
+        ) : (
+          <>
+            {/* Escritorio */}
+            <table className="hidden w-full border-collapse text-left lg:table">
+              <caption className="sr-only">
+                Turnos de caja con fondo inicial, arqueo de efectivo y digital, diferencia y estado
+              </caption>
+              <thead>
+                <tr className="border-b border-line bg-sunken text-[10px] uppercase tracking-[0.08em] text-ink-muted">
+                  <th scope="col" className="px-4 py-2.5 font-semibold">Turno / cajero</th>
+                  <th scope="col" className="px-4 py-2.5 text-right font-semibold">Fondo</th>
+                  <th scope="col" className="px-4 py-2.5 font-semibold">Efectivo (sis / decl)</th>
+                  <th scope="col" className="px-4 py-2.5 font-semibold">Digital (sis / decl)</th>
+                  <th scope="col" className="px-4 py-2.5 text-right font-semibold">Diferencia</th>
+                  <th scope="col" className="px-4 py-2.5 font-semibold">Estado</th>
+                  <th scope="col" className="px-4 py-2.5 font-semibold">Apertura</th>
                 </tr>
-              ) : (
-                cajasFiltradas.map((c) => {
+              </thead>
+              <tbody className="divide-y divide-line">
+                {cajasFiltradas.map((c) => {
                   const difEfec = Number(c.diferencia_efectivo) || 0;
                   const difDig = Number(c.diferencia_digital) || 0;
                   const totalDif = difEfec + difDig;
 
                   return (
-                    <tr key={c.id} className="hover:bg-[#201d19] transition">
-                      <td className="py-3 px-4 font-medium text-white">
-                        <span className="font-extrabold text-amber-400 mr-2 num-tabular">#{c.id}</span>
-                        <span>{c.usuario_nombre}</span>
+                    <tr key={c.id} className="transition-colors hover:bg-raised/60">
+                      <td className="px-4 py-2.5">
+                        <span className="font-mono text-[12.5px] font-bold text-ember tnum">
+                          #{String(c.id).padStart(3, '0')}
+                        </span>
+                        <span className="mt-0.5 block max-w-[150px] truncate text-[12.5px] text-ink">
+                          {c.usuario_nombre}
+                        </span>
                       </td>
-                      <td className="py-3 px-4 text-[#ede7dc] num-tabular">
-                        Bs {Number(c.monto_inicial).toFixed(2)}
+                      <td className="px-4 py-2.5 text-right font-mono text-[12px] text-ink-soft tnum">
+                        {Number(c.monto_inicial).toFixed(2)}
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="px-4 py-2.5">
                         {c.estado === 'CERRADA' ? (
-                          <div className="text-[11px] num-tabular">
-                            <span className="text-[#7a6f5f]">Sis: </span>
-                            <span className="font-semibold text-[#ede7dc]">
-                              Bs {Number(c.monto_efectivo_sistema).toFixed(2)}
+                          <span className="font-mono text-[11.5px] text-ink-muted tnum">
+                            {Number(c.monto_efectivo_sistema).toFixed(2)}
+                            <span aria-hidden className="mx-1 text-ink-faint">/</span>
+                            <span className="font-semibold text-ink">
+                              {Number(c.monto_efectivo_declarado).toFixed(2)}
                             </span>
-                            <span className="text-[#473f36] mx-1">|</span>
-                            <span className="text-[#7a6f5f]">Decl: </span>
-                            <span className="font-bold text-white">
-                              Bs {Number(c.monto_efectivo_declarado).toFixed(2)}
-                            </span>
-                          </div>
+                          </span>
                         ) : (
-                          <span className="text-[#6e6355] italic">Turno en curso...</span>
+                          <span className="text-[11.5px] italic text-ink-faint">En curso…</span>
                         )}
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="px-4 py-2.5">
                         {c.estado === 'CERRADA' ? (
-                          <div className="text-[11px] num-tabular">
-                            <span className="text-[#7a6f5f]">Sis: </span>
-                            <span className="font-semibold text-[#ede7dc]">
-                              Bs {Number(c.monto_digital_sistema).toFixed(2)}
+                          <span className="font-mono text-[11.5px] text-ink-muted tnum">
+                            {Number(c.monto_digital_sistema).toFixed(2)}
+                            <span aria-hidden className="mx-1 text-ink-faint">/</span>
+                            <span className="font-semibold text-ink">
+                              {Number(c.monto_digital_declarado).toFixed(2)}
                             </span>
-                            <span className="text-[#473f36] mx-1">|</span>
-                            <span className="text-[#7a6f5f]">Decl: </span>
-                            <span className="font-bold text-white">
-                              Bs {Number(c.monto_digital_declarado).toFixed(2)}
-                            </span>
-                          </div>
+                          </span>
                         ) : (
-                          <span className="text-[#6e6355] italic">Turno en curso...</span>
+                          <span className="text-[11.5px] italic text-ink-faint">En curso…</span>
                         )}
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="px-4 py-2.5 text-right">
                         {c.estado === 'CERRADA' ? (
                           <span
-                            className={`inline-flex items-center gap-1 font-bold num-tabular ${
-                              totalDif < 0
-                                ? 'text-rose-400'
-                                : totalDif > 0
-                                ? 'text-emerald-400'
-                                : 'text-[#a89b88]'
+                            className={`inline-flex items-center gap-1 font-mono text-[12px] font-bold tnum ${
+                              totalDif < 0 ? 'text-danger' : totalDif > 0 ? 'text-ok' : 'text-ink-soft'
                             }`}
                           >
                             {totalDif < 0 ? (
-                              <ArrowDownLeft className="w-3.5 h-3.5" />
+                              <ArrowDownLeft className="size-3.5" strokeWidth={2.75} aria-hidden />
                             ) : totalDif > 0 ? (
-                              <ArrowUpRight className="w-3.5 h-3.5" />
+                              <ArrowUpRight className="size-3.5" strokeWidth={2.75} aria-hidden />
                             ) : (
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                              <CheckCircle2 className="size-3.5" strokeWidth={2.75} aria-hidden />
                             )}
-                            Bs {totalDif.toFixed(2)}
+                            {totalDif.toFixed(2)}
                           </span>
                         ) : (
-                          <span className="text-[#6e6355]">-</span>
+                          <span className="text-[12px] text-ink-faint">—</span>
                         )}
                       </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            c.estado === 'ABIERTA'
-                              ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 animate-pulse'
-                              : 'bg-[#221f1c] text-[#8c806f] border border-[#2e2721]'
-                          }`}
-                        >
-                          {c.estado}
-                        </span>
+                      <td className="px-4 py-2.5">
+                        <Badge tono={c.estado === 'ABIERTA' ? 'ok' : 'neutro'}>{c.estado}</Badge>
                       </td>
-                      <td className="py-3 px-4 text-[#8c806f] text-[11px] num-tabular">
-                        {new Date(c.fecha_inicio).toLocaleDateString()} {new Date(c.fecha_inicio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      <td className="whitespace-nowrap px-4 py-2.5 font-mono text-[11px] text-ink-muted tnum">
+                        {fechaCorta(c.fecha_inicio)}
                       </td>
                     </tr>
                   );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                })}
+              </tbody>
+            </table>
+
+            {/* Móvil / tablet */}
+            <ul className="divide-y divide-line lg:hidden">
+              {cajasFiltradas.map((c) => {
+                const difEfec = Number(c.diferencia_efectivo) || 0;
+                const difDig = Number(c.diferencia_digital) || 0;
+                const totalDif = difEfec + difDig;
+                const cerrada = c.estado === 'CERRADA';
+
+                return (
+                  <li key={c.id} className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-mono text-[13px] font-bold text-ember tnum">
+                            #{String(c.id).padStart(3, '0')}
+                          </span>
+                          <span className="truncate text-[13px] font-semibold text-ink">
+                            {c.usuario_nombre}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 font-mono text-[10.5px] text-ink-faint tnum">
+                          Apertura {fechaCorta(c.fecha_inicio)}
+                        </p>
+                      </div>
+                      <Badge tono={c.estado === 'ABIERTA' ? 'ok' : 'neutro'}>{c.estado}</Badge>
+                    </div>
+
+                    <dl className="mt-2.5 grid grid-cols-2 gap-2 rounded-[10px] border border-line bg-sunken p-2.5">
+                      <div>
+                        <dt className="text-[10px] uppercase tracking-[0.07em] text-ink-muted">
+                          Fondo inicial
+                        </dt>
+                        <dd className="font-mono text-[12.5px] font-semibold text-ink tnum">
+                          Bs {Number(c.monto_inicial).toFixed(2)}
+                        </dd>
+                      </div>
+                      <div className="text-right">
+                        <dt className="text-[10px] uppercase tracking-[0.07em] text-ink-muted">
+                          Diferencia
+                        </dt>
+                        <dd
+                          className={`font-mono text-[12.5px] font-bold tnum ${
+                            !cerrada
+                              ? 'text-ink-faint'
+                              : totalDif < 0
+                                ? 'text-danger'
+                                : totalDif > 0
+                                  ? 'text-ok'
+                                  : 'text-ink-soft'
+                          }`}
+                        >
+                          {cerrada ? `Bs ${totalDif.toFixed(2)}` : '—'}
+                        </dd>
+                      </div>
+
+                      <div className="col-span-2 mt-0.5 grid grid-cols-2 gap-2 border-t border-line pt-2">
+                        <div>
+                          <dt className="text-[10px] uppercase tracking-[0.07em] text-ink-muted">
+                            Efectivo
+                          </dt>
+                          <dd className="font-mono text-[11.5px] text-ink-muted tnum">
+                            {cerrada ? (
+                              <>
+                                {Number(c.monto_efectivo_sistema).toFixed(2)} /{' '}
+                                <span className="font-semibold text-ink">
+                                  {Number(c.monto_efectivo_declarado).toFixed(2)}
+                                </span>
+                              </>
+                            ) : (
+                              'En curso'
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] uppercase tracking-[0.07em] text-ink-muted">
+                            Digital
+                          </dt>
+                          <dd className="font-mono text-[11.5px] text-ink-muted tnum">
+                            {cerrada ? (
+                              <>
+                                {Number(c.monto_digital_sistema).toFixed(2)} /{' '}
+                                <span className="font-semibold text-ink">
+                                  {Number(c.monto_digital_declarado).toFixed(2)}
+                                </span>
+                              </>
+                            ) : (
+                              'En curso'
+                            )}
+                          </dd>
+                        </div>
+                      </div>
+                    </dl>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+      </section>
+
+      <p className="mt-2 font-mono text-[10.5px] text-ink-faint">
+        Sistema / declarado · diferencia = efectivo + digital
+      </p>
     </div>
   );
 }

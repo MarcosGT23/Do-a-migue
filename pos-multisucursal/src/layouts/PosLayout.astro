@@ -13,8 +13,10 @@ const { title } = Astro.props;
 <html lang="es" class="dark">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#14110f" />
     <title>{title} | Doña Migue POS</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -22,85 +24,40 @@ const { title } = Astro.props;
       rel="stylesheet"
     />
     <ClientRouter />
-    <style is:global>
-      /* Ocultar el portal de impresión en pantalla regular */
-      #ticket-termico-impresion-portal {
-        display: none !important;
-      }
-
-      /* 🖨️ Reglas de Impresión Térmica Directa a 0mm */
-      @media print {
-        @page {
-          size: 80mm 297mm;
-          margin: 0mm !important;
-        }
-
-        *, *::before, *::after {
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-        }
-
-        html, body {
-          background: #ffffff !important;
-          color: #000000 !important;
-          margin: 0mm !important;
-          padding: 0mm !important;
-          width: 100% !important;
-          height: auto !important;
-          min-height: 0 !important;
-          overflow: visible !important;
-        }
-
-        /* Oculta toda la aplicación para que no ocupe espacio de flujo */
-        body > * {
-          display: none !important;
-        }
-
-        /* Único elemento visible en la página impreso en la coordenada top: 0mm */
-        body > #ticket-termico-impresion-portal {
-          display: block !important;
-          visibility: visible !important;
-          position: absolute !important;
-          top: 0mm !important;
-          left: 0mm !important;
-          right: 0mm !important;
-          margin: 0 auto !important;
-          margin-top: 0mm !important;
-          padding: 0mm 2.5mm 3mm 2.5mm !important;
-          padding-top: 0mm !important;
-          background: #ffffff !important;
-          box-sizing: border-box !important;
-          font-family: 'Courier New', Courier, monospace !important;
-          box-shadow: none !important;
-          border: none !important;
-        }
-
-        body > #ticket-termico-impresion-portal * {
-          visibility: visible !important;
-        }
-
-        .ticket-ancho-80mm {
-          width: 72mm !important;
-          max-width: 72mm !important;
-          font-size: 11px !important;
-          line-height: 1.25 !important;
-        }
-
-        .ticket-ancho-58mm {
-          width: 48mm !important;
-          max-width: 48mm !important;
-          font-size: 9.5px !important;
-          line-height: 1.15 !important;
-        }
-
-        .no-print {
-          display: none !important;
-        }
-      }
-    </style>
   </head>
-  <body class="bg-[#100f0e] text-[#ede7dc] h-screen w-screen overflow-hidden select-none antialiased">
+  <body class="h-dvh w-full overflow-hidden bg-app text-ink antialiased">
     <slot />
+    {import.meta.env.DEV && (
+      <script is:inline>
+        (() => {
+          const mostrar = (titulo, detalle) => {
+            let caja = document.getElementById('pos-diagnostico');
+            if (!caja) {
+              caja = document.createElement('div');
+              caja.id = 'pos-diagnostico';
+              caja.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:99999;background:#7f1d1d;color:#fff;font:600 12px/1.45 ui-monospace,monospace;padding:10px 12px;border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.5);white-space:pre-wrap;';
+              document.body.appendChild(caja);
+            }
+            caja.textContent = titulo + (detalle ? '\n' + detalle : '') + '\n(recarga con Ctrl+Shift+R; este aviso solo aparece en desarrollo)';
+          };
+          addEventListener('error', (e) => {
+            if (e.target && e.target.tagName === 'SCRIPT') {
+              mostrar('No se pudo cargar un script de la página.', e.target.src || '');
+              return;
+            }
+            mostrar('Error de JavaScript:', e.message || String(e.error || e));
+          }, true);
+          addEventListener('unhandledrejection', (e) => {
+            const r = e.reason;
+            mostrar('Promesa rechazada sin manejar:', (r && (r.stack || r.message)) || String(r));
+          });
+          setTimeout(() => {
+            if (!window.__posHidratado) {
+              mostrar('La interfaz no se inicializó (React no arrancó).', 'Puede ser caché o un script bloqueado. Fuerza la recarga.');
+            }
+          }, 3000);
+        })();
+      </script>
+    )}
   </body>
 </html>
-

@@ -1,11 +1,15 @@
 import React, { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { toast, Toaster } from 'sonner';
 import {
   Plus, Search, Layers, Edit2, Trash2,
-  CheckCircle2, XCircle, X, AlertTriangle
+  AlertTriangle, X,
 } from 'lucide-react';
 import { PosService } from '../../services/pos.service';
+import { Button } from '../ui/Button';
+import { IconButton } from '../ui/IconButton';
+import { Badge } from '../ui/Badge';
+import { Modal } from '../ui/Modal';
+import { Field, Input, Textarea } from '../ui/Field';
 
 interface Categoria {
   id: number;
@@ -268,107 +272,143 @@ export default function CatalogoManager({
     });
   }, [productos, categoriaSeleccionada, busqueda]);
 
+  const sinStock = productos.filter((p) => p.stock_actual <= 0).length;
+
   return (
-    <div className="p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
       <Toaster position="top-right" richColors theme="dark" />
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Cabecera */}
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <span className="text-xs font-semibold text-amber-500 uppercase tracking-wide">
-            Administración del Menú
-          </span>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight mt-0.5">
-            Carta de Platos y Precios
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-ember">
+            Administración del menú
+          </p>
+          <h1 className="mt-1 text-[22px] font-extrabold leading-tight tracking-[-0.025em] text-ink sm:text-[26px]">
+            Carta de platos y precios
           </h1>
-          <p className="text-xs text-[#9c907f] mt-1">
-            Gestiona la disponibilidad, precios y categorización para los terminales de venta.
+          <p className="mt-1 max-w-xl text-[12.5px] leading-5 text-ink-muted">
+            Disponibilidad, precios y categorías de lo que ven los terminales de venta.
+          </p>
+          <p className="mt-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-faint">
+            {productos.length} platos · {categorias.length} categorías ·{' '}
+            <span className={sinStock > 0 ? 'text-warn' : ''}>{sinStock} sin stock</span>
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variante="secundaria"
             onClick={abrirModalCrearCategoria}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1a1715] border border-[#2b2520] text-[#ede7dc] hover:border-amber-600/40 text-xs font-semibold transition"
+            icono={<Layers className="size-4 text-ember" strokeWidth={2.25} />}
           >
-            <Layers className="w-4 h-4 text-amber-500" />
-            <span>Nueva Categoría</span>
-          </button>
-          <button
+            Nueva categoría
+          </Button>
+          <Button
             onClick={abrirModalCrearProducto}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs font-bold shadow-lg shadow-orange-600/20 transition"
+            icono={<Plus className="size-4" strokeWidth={2.5} />}
           >
-            <Plus className="w-4 h-4" />
-            <span>Añadir Plato / Producto</span>
-          </button>
+            Añadir plato
+          </Button>
         </div>
-      </div>
+      </header>
 
-      {/* Filtros de Búsqueda y Pestañas de Categoría */}
-      <div className="space-y-3 bg-[#1a1715] border border-[#2b2520] p-4 rounded-2xl">
-        <div className="flex flex-col sm:flex-row items-center gap-4">
-          <div className="relative flex-1 w-full">
-            <Search className="w-4 h-4 text-[#7a6f5f] absolute left-3.5 top-1/2 -translate-y-1/2" />
+      {/* Filtros */}
+      <div className="mt-5 space-y-2.5 rounded-card border border-line-strong bg-card p-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative min-w-0 flex-1">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted"
+              strokeWidth={2}
+              aria-hidden
+            />
+            <label htmlFor="catalogo-busqueda" className="sr-only">
+              Buscar plato
+            </label>
             <input
-              type="text"
+              id="catalogo-busqueda"
+              type="search"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar plato por nombre..."
-              className="w-full pl-10 pr-4 py-2 bg-[#100f0e] border border-[#2b2520] rounded-xl text-xs text-white placeholder-[#6e6355] focus:outline-none focus:border-amber-600 transition"
+              placeholder="Buscar plato por nombre"
+              className="h-10 w-full rounded-field border border-line-strong bg-sunken pl-9 pr-8 text-[13.5px] text-ink placeholder:text-ink-faint transition-colors hover:border-control focus-visible:border-ember focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember/25 [&::-webkit-search-cancel-button]:hidden"
             />
+            {busqueda && (
+              <button
+                type="button"
+                onClick={() => setBusqueda('')}
+                aria-label="Limpiar búsqueda"
+                className="absolute right-2 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-ink-muted hover:bg-raised hover:text-ink"
+              >
+                <X className="size-3.5" strokeWidth={2.5} />
+              </button>
+            )}
           </div>
 
-          {/* Acciones de la categoría activa seleccionada */}
           {categoriaActivaObj && (
-            <div className="flex items-center gap-2 shrink-0 bg-[#12100f] border border-[#29231e] px-3 py-1.5 rounded-xl">
-              <span className="text-[11px] text-[#9c907f] font-medium truncate max-w-[140px]">
+            <div className="flex shrink-0 items-center gap-1.5 rounded-field border border-line bg-sunken py-1 pl-2.5 pr-1">
+              <span className="max-w-[160px] truncate text-[12px] font-semibold text-ink">
                 {categoriaActivaObj.nombre}
               </span>
-              <button
+              <IconButton
+                etiqueta="Editar categoría"
+                tamano="sm"
                 onClick={() => abrirModalEditarCategoria(categoriaActivaObj)}
-                className="p-1 rounded-lg hover:bg-[#26201a] text-amber-400 transition"
-                title="Editar nombre y datos de esta categoría"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-              </button>
-              <button
+                icono={<Edit2 className="size-3.5" strokeWidth={2.25} />}
+              />
+              <IconButton
+                etiqueta="Eliminar categoría"
+                tamano="sm"
+                tono="peligro"
                 onClick={() => setCategoriaParaEliminar(categoriaActivaObj)}
-                className="p-1 rounded-lg hover:bg-rose-950/40 text-rose-400 transition"
-                title="Eliminar esta categoría"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+                icono={<Trash2 className="size-3.5" strokeWidth={2.25} />}
+              />
             </div>
           )}
         </div>
 
-        {/* Barra de Categorías */}
-        <div className="flex items-center gap-2 overflow-x-auto w-full no-scrollbar pt-1">
+        <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto pb-0.5">
           <button
+            type="button"
             onClick={() => setCategoriaSeleccionada('TODAS')}
-            className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
+            aria-pressed={categoriaSeleccionada === 'TODAS'}
+            className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-semibold transition-colors ${
               categoriaSeleccionada === 'TODAS'
-                ? 'bg-amber-600/20 text-amber-300 border border-amber-600/40'
-                : 'text-[#9c907f] hover:text-white bg-[#100f0e]'
+                ? 'border-ember-strong bg-ember-strong text-white'
+                : 'border-line-strong bg-sunken text-ink-soft hover:text-ink'
             }`}
           >
-            Todas ({productos.length})
+            Todas
+            <span
+              className={`font-mono text-[10.5px] tnum ${
+                categoriaSeleccionada === 'TODAS' ? 'text-white/70' : 'text-ink-faint'
+              }`}
+            >
+              {productos.length}
+            </span>
           </button>
+
           {categorias.map((cat) => {
             const countProd = productos.filter((p) => p.categoria_id === cat.id).length;
             const esActiva = categoriaSeleccionada === cat.id;
             return (
               <button
                 key={cat.id}
+                type="button"
                 onClick={() => setCategoriaSeleccionada(cat.id)}
-                className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition flex items-center gap-2 ${
+                aria-pressed={esActiva}
+                className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-semibold transition-colors ${
                   esActiva
-                    ? 'bg-amber-600/20 text-amber-300 border border-amber-600/40'
-                    : 'text-[#9c907f] hover:text-white bg-[#100f0e]'
+                    ? 'border-ember-strong bg-ember-strong text-white'
+                    : 'border-line-strong bg-sunken text-ink-soft hover:text-ink'
                 }`}
               >
-                <span>{cat.nombre}</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#26211c] text-[#8c806f]">
+                {cat.nombre}
+                <span
+                  className={`font-mono text-[10.5px] tnum ${
+                    esActiva ? 'text-white/70' : 'text-ink-faint'
+                  }`}
+                >
                   {countProd}
                 </span>
               </button>
@@ -377,392 +417,316 @@ export default function CatalogoManager({
         </div>
       </div>
 
-      {/* Tabla de Productos */}
-      <div className="bg-[#1a1715] border border-[#2b2520] rounded-2xl overflow-hidden shadow-xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-[#29231e] text-[#8c806f] uppercase tracking-wider bg-[#141210]">
-                <th className="py-3 px-4 font-semibold">Plato / Producto</th>
-                <th className="py-3 px-4 font-semibold">Categoría</th>
-                <th className="py-3 px-4 font-semibold">Precio Base</th>
-                <th className="py-3 px-4 font-semibold">Stock Actual</th>
-                <th className="py-3 px-4 font-semibold">Estado</th>
-                <th className="py-3 px-4 font-semibold text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#26211c]">
-              {productosFiltrados.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-[#6e6355]">
-                    No se encontraron productos en este menú.
-                  </td>
-                </tr>
-              ) : (
-                productosFiltrados.map((prod) => (
-                  <tr key={prod.id} className="hover:bg-[#201d19] transition">
-                    <td className="py-3 px-4 font-medium text-white">
-                      <div>{prod.nombre}</div>
-                      {prod.descripcion && (
-                        <span className="text-[10px] text-[#8c806f]">{prod.descripcion}</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-[#ede7dc]">{prod.categoria_nombre}</td>
-                    <td className="py-3 px-4 font-extrabold text-amber-400 num-tabular">
-                      Bs {prod.precio_base.toFixed(2)}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold num-tabular ${
-                          prod.stock_actual > 0
-                            ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40'
-                            : 'bg-rose-950/60 text-rose-400 border border-rose-800/40'
-                        }`}
-                      >
-                        {prod.stock_actual} uds
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      {prod.activo ? (
-                        <span className="flex items-center gap-1 text-emerald-400 font-medium">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> En Carta
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-rose-400 font-medium">
-                          <XCircle className="w-3.5 h-3.5" /> Oculto
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => abrirModalEditarProducto(prod)}
-                          className="p-1.5 rounded-lg bg-[#100f0e] border border-[#2b2520] text-[#9c907f] hover:text-white hover:border-amber-600 transition"
-                          title="Editar plato"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => setProductoParaEliminar(prod)}
-                          className="p-1.5 rounded-lg bg-[#100f0e] border border-[#2b2520] text-[#9c907f] hover:text-rose-400 hover:border-rose-800 transition"
-                          title="Eliminar plato"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+      {/* Listado */}
+      {productosFiltrados.length === 0 ? (
+        <p className="mt-3 rounded-card border border-dashed border-line-strong bg-card px-4 py-12 text-center text-[12.5px] text-ink-faint">
+          No se encontraron platos con este criterio.
+        </p>
+      ) : (
+        <ul className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+          {productosFiltrados.map((prod) => (
+            <li
+              key={prod.id}
+              className={`group flex flex-col rounded-card border bg-card p-3.5 transition-colors ${
+                prod.activo
+                  ? 'border-line-strong hover:border-ember/40'
+                  : 'border-line border-dashed bg-card/60'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3
+                    className={`truncate text-[14px] font-bold leading-tight tracking-[-0.01em] ${
+                      prod.activo ? 'text-ink' : 'text-ink-muted'
+                    }`}
+                  >
+                    {prod.nombre}
+                  </h3>
+                  <p className="mt-0.5 truncate text-[11px] text-ink-muted">
+                    {prod.categoria_nombre}
+                  </p>
+                </div>
+                <span className="shrink-0 font-mono text-[15px] font-bold text-ember tnum">
+                  Bs {prod.precio_base.toFixed(2)}
+                </span>
+              </div>
+
+              {prod.descripcion && (
+                <p className="mt-2 line-clamp-2 text-[11.5px] leading-[1.45] text-ink-muted">
+                  {prod.descripcion}
+                </p>
               )}
-            </tbody>
-          </table>
+
+              <div className="mt-2.5 flex items-center gap-1.5">
+                <Badge
+                  tono={prod.stock_actual > 0 ? 'ok' : 'peligro'}
+                  mono
+                >
+                  {prod.stock_actual > 0 ? `${prod.stock_actual} uds` : 'sin stock'}
+                </Badge>
+                {!prod.activo && <Badge tono="neutro">Oculto</Badge>}
+              </div>
+
+              <div className="mt-3 flex items-center gap-1.5 border-t border-line pt-2.5">
+                <button
+                  type="button"
+                  onClick={() => abrirModalEditarProducto(prod)}
+                  className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-[8px] border border-line-strong bg-sunken text-[11.5px] font-semibold text-ink-soft transition-colors hover:border-control hover:text-ink"
+                >
+                  <Edit2 className="size-3.5" strokeWidth={2.25} />
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProductoParaEliminar(prod)}
+                  aria-label={`Eliminar ${prod.nombre}`}
+                  className="flex size-9 items-center justify-center rounded-[8px] border border-danger/30 bg-danger/10 text-danger transition-colors hover:bg-danger/18"
+                >
+                  <Trash2 className="size-3.5" strokeWidth={2.25} />
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Crear / editar producto */}
+      <Modal
+        abierto={modalProductoAbierto}
+        onCerrar={() => setModalProductoAbierto(false)}
+        titulo={productoEditando ? 'Editar plato' : 'Nuevo plato o bebida'}
+        descripcion={
+          productoEditando
+            ? 'Los cambios se reflejan en los terminales al guardar.'
+            : 'Se publica en la carta del terminal según su categoría.'
+        }
+        posicion="centro"
+        ancho="md"
+        pie={
+          <div className="flex items-center gap-2">
+            <Button variante="secundaria" onClick={() => setModalProductoAbierto(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" form="form-producto" bloque cargando={guardando}>
+              {guardando ? 'Guardando…' : productoEditando ? 'Actualizar plato' : 'Guardar plato'}
+            </Button>
+          </div>
+        }
+      >
+        <form id="form-producto" onSubmit={guardarProductoHandler} className="space-y-4 p-5">
+          <Field etiqueta="Nombre del plato" htmlFor="prod-nombre">
+            <Input
+              id="prod-nombre"
+              type="text"
+              required
+              value={formNombre}
+              onChange={(e) => setFormNombre(e.target.value)}
+              placeholder="Ej. Kjara tradicional, costilla especial"
+            />
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field etiqueta="Categoría" htmlFor="prod-categoria">
+              <select
+                id="prod-categoria"
+                value={formCategoriaId}
+                onChange={(e) => setFormCategoriaId(Number(e.target.value))}
+                className="h-11 w-full rounded-field border border-line-strong bg-sunken px-2.5 text-[13.5px] text-ink transition-colors hover:border-control focus-visible:border-ember focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember/25"
+              >
+                {categorias.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field etiqueta="Precio (Bs)" htmlFor="prod-precio">
+              <Input
+                id="prod-precio"
+                type="number"
+                step="0.01"
+                min="0"
+                required
+                value={formPrecio}
+                onChange={(e) => setFormPrecio(e.target.value)}
+                placeholder="0.00"
+                className="font-mono tnum"
+              />
+            </Field>
+          </div>
+
+          <Field
+            etiqueta="Descripción o guarniciones"
+            htmlFor="prod-descripcion"
+            ayuda="Opcional. Se muestra en la tarjeta del plato."
+          >
+            <Textarea
+              id="prod-descripcion"
+              rows={2}
+              value={formDescripcion}
+              onChange={(e) => setFormDescripcion(e.target.value)}
+              placeholder="Ej. con mote, papa y llajwa"
+            />
+          </Field>
+
+          <label
+            htmlFor="prod-activo"
+            className="flex cursor-pointer items-start gap-2.5 rounded-field border border-line bg-sunken px-3 py-2.5"
+          >
+            <input
+              id="prod-activo"
+              type="checkbox"
+              checked={formActivo}
+              onChange={(e) => setFormActivo(e.target.checked)}
+              className="mt-0.5 size-4 shrink-0 accent-ember"
+            />
+            <span className="text-[12.5px] leading-5 text-ink-soft">
+              Disponible de inmediato en el terminal POS
+            </span>
+          </label>
+        </form>
+      </Modal>
+
+      {/* Crear / editar categoría */}
+      <Modal
+        abierto={modalCategoriaAbierto}
+        onCerrar={() => setModalCategoriaAbierto(false)}
+        titulo={categoriaEditando ? 'Editar categoría' : 'Nueva categoría'}
+        descripcion="Agrupa los platos en la carta y en los filtros del terminal."
+        posicion="centro"
+        ancho="md"
+        pie={
+          <div className="flex items-center gap-2">
+            <Button variante="secundaria" onClick={() => setModalCategoriaAbierto(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" form="form-categoria" bloque cargando={guardando}>
+              {guardando ? 'Guardando…' : categoriaEditando ? 'Actualizar' : 'Crear categoría'}
+            </Button>
+          </div>
+        }
+      >
+        <form id="form-categoria" onSubmit={guardarCategoriaHandler} className="space-y-4 p-5">
+          <Field etiqueta="Nombre de la categoría" htmlFor="cat-nombre">
+            <Input
+              id="cat-nombre"
+              type="text"
+              required
+              value={catNombre}
+              onChange={(e) => setCatNombre(e.target.value)}
+              placeholder="Ej. Kjaras, guarniciones, refrescos"
+            />
+          </Field>
+
+          <Field etiqueta="Descripción breve" htmlFor="cat-descripcion">
+            <Input
+              id="cat-descripcion"
+              type="text"
+              value={catDescripcion}
+              onChange={(e) => setCatDescripcion(e.target.value)}
+              placeholder="Opcional"
+            />
+          </Field>
+
+          <Field
+            etiqueta="Orden en la carta"
+            htmlFor="cat-orden"
+            ayuda="Menor número aparece primero en el terminal."
+            className="max-w-[160px]"
+          >
+            <Input
+              id="cat-orden"
+              type="number"
+              min="1"
+              value={catOrden}
+              onChange={(e) => setCatOrden(e.target.value)}
+              className="font-mono tnum"
+            />
+          </Field>
+        </form>
+      </Modal>
+
+      {/* Eliminar producto */}
+      <Modal
+        abierto={!!productoParaEliminar}
+        onCerrar={() => setProductoParaEliminar(null)}
+        titulo="¿Eliminar plato?"
+        posicion="centro"
+        ancho="ajustado"
+        pie={
+          <div className="flex items-center gap-2">
+            <Button
+              variante="secundaria"
+              onClick={() => setProductoParaEliminar(null)}
+              disabled={eliminandoProducto}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variante="peligro"
+              bloque
+              cargando={eliminandoProducto}
+              onClick={confirmarEliminarProducto}
+              icono={<Trash2 className="size-4" strokeWidth={2.25} />}
+            >
+              {eliminandoProducto ? 'Eliminando…' : 'Sí, eliminar'}
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex items-start gap-3 p-5">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-[11px] border border-danger/35 bg-danger/12 text-danger">
+            <AlertTriangle className="size-5" strokeWidth={2.25} aria-hidden />
+          </span>
+          <p className="text-[13px] leading-5 text-ink-soft">
+            Se quitará del menú{' '}
+            <strong className="font-semibold text-ink">{productoParaEliminar?.nombre}</strong> (Bs{' '}
+            {Number(productoParaEliminar?.precio_base ?? 0).toFixed(2)}). Las comandas ya cobradas
+            conservan su registro.
+          </p>
         </div>
-      </div>
+      </Modal>
 
-      {/* Modal Crear / Editar Producto */}
-      <AnimatePresence>
-        {modalProductoAbierto && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.94, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.94, opacity: 0 }}
-              className="bg-[#181614] border border-[#2e2721] rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl"
+      {/* Eliminar categoría */}
+      <Modal
+        abierto={!!categoriaParaEliminar}
+        onCerrar={() => setCategoriaParaEliminar(null)}
+        titulo="¿Eliminar categoría?"
+        posicion="centro"
+        ancho="ajustado"
+        pie={
+          <div className="flex items-center gap-2">
+            <Button
+              variante="secundaria"
+              onClick={() => setCategoriaParaEliminar(null)}
+              disabled={eliminandoCategoria}
             >
-              <div className="flex justify-between items-center">
-                <h3 className="text-base font-bold text-white">
-                  {productoEditando ? 'Editar Plato del Menú' : 'Nuevo Plato / Bebida'}
-                </h3>
-                <button
-                  onClick={() => setModalProductoAbierto(false)}
-                  className="text-[#7a6f5f] hover:text-white"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <form onSubmit={guardarProductoHandler} className="space-y-3.5">
-                <div>
-                  <label className="text-xs text-[#ede7dc]">Nombre del Plato</label>
-                  <input
-                    type="text"
-                    required
-                    value={formNombre}
-                    onChange={(e) => setFormNombre(e.target.value)}
-                    placeholder="Ej. Kjara Tradicional, Costilla Especial"
-                    className="mt-1 w-full px-3 py-2 bg-[#100f0e] border border-[#2b2520] rounded-xl text-xs text-white focus:outline-none focus:border-amber-600"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-[#ede7dc]">Categoría</label>
-                    <select
-                      value={formCategoriaId}
-                      onChange={(e) => setFormCategoriaId(Number(e.target.value))}
-                      className="mt-1 w-full px-3 py-2 bg-[#100f0e] border border-[#2b2520] rounded-xl text-xs text-white focus:outline-none focus:border-amber-600"
-                    >
-                      {categorias.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.nombre}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-[#ede7dc]">Precio (Bs)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      value={formPrecio}
-                      onChange={(e) => setFormPrecio(e.target.value)}
-                      placeholder="0.00"
-                      className="mt-1 w-full px-3 py-2 bg-[#100f0e] border border-[#2b2520] rounded-xl text-xs text-white num-tabular focus:outline-none focus:border-amber-600"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs text-[#ede7dc]">Descripción / Guarniciones</label>
-                  <textarea
-                    rows={2}
-                    value={formDescripcion}
-                    onChange={(e) => setFormDescripcion(e.target.value)}
-                    placeholder="Ej. Acompañado de mote, papa y llajwa..."
-                    className="mt-1 w-full px-3 py-2 bg-[#100f0e] border border-[#2b2520] rounded-xl text-xs text-white placeholder-[#6e6355] focus:outline-none focus:border-amber-600"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2 pt-1">
-                  <input
-                    type="checkbox"
-                    id="activoCheck"
-                    checked={formActivo}
-                    onChange={(e) => setFormActivo(e.target.checked)}
-                    className="rounded bg-[#100f0e] border-[#2b2520] text-amber-600 focus:ring-0"
-                  />
-                  <label htmlFor="activoCheck" className="text-xs text-[#ede7dc] select-none">
-                    Disponible inmediatamente en Terminal POS
-                  </label>
-                </div>
-
-                <div className="flex items-center gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setModalProductoAbierto(false)}
-                    className="w-1/2 py-2.5 rounded-xl bg-[#26211c] hover:bg-[#332c25] text-[#ede7dc] font-semibold text-xs transition"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={guardando}
-                    className="w-1/2 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-md transition"
-                  >
-                    {guardando
-                      ? 'Guardando...'
-                      : productoEditando
-                      ? 'Actualizar Plato'
-                      : 'Guardar Plato'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal Eliminar Producto */}
-      <AnimatePresence>
-        {productoParaEliminar && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.94, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.94, opacity: 0 }}
-              className="bg-[#181614] border border-[#2e2721] rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl text-center"
+              Cancelar
+            </Button>
+            <Button
+              variante="peligro"
+              bloque
+              cargando={eliminandoCategoria}
+              onClick={confirmarEliminarCategoria}
+              icono={<Trash2 className="size-4" strokeWidth={2.25} />}
             >
-              <div className="w-12 h-12 rounded-2xl bg-rose-950/60 border border-rose-800/40 text-rose-400 flex items-center justify-center mx-auto">
-                <AlertTriangle className="w-6 h-6" />
-              </div>
-
-              <div>
-                <h3 className="text-base font-bold text-white">¿Eliminar Plato?</h3>
-                <p className="text-xs text-[#9c907f] mt-1.5">
-                  Estás a punto de quitar del menú: <strong className="text-white">{productoParaEliminar.nombre}</strong> (Bs {productoParaEliminar.precio_base.toFixed(2)}).
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setProductoParaEliminar(null)}
-                  disabled={eliminandoProducto}
-                  className="w-1/2 py-2.5 rounded-xl bg-[#26211c] hover:bg-[#332c25] text-[#ede7dc] font-semibold text-xs transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmarEliminarProducto}
-                  disabled={eliminandoProducto}
-                  className="w-1/2 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-600/20 transition"
-                >
-                  {eliminandoProducto ? 'Eliminando...' : 'Sí, Eliminar'}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal Crear / Editar Categoría */}
-      <AnimatePresence>
-        {modalCategoriaAbierto && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.94, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.94, opacity: 0 }}
-              className="bg-[#181614] border border-[#2e2721] rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl"
-            >
-              <div className="flex justify-between items-center">
-                <h3 className="text-base font-bold text-white">
-                  {categoriaEditando ? 'Editar Categoría de Carta' : 'Nueva Categoría de Carta'}
-                </h3>
-                <button
-                  onClick={() => setModalCategoriaAbierto(false)}
-                  className="text-[#7a6f5f] hover:text-white"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <form onSubmit={guardarCategoriaHandler} className="space-y-3.5">
-                <div>
-                  <label className="text-xs text-[#ede7dc]">Nombre de la Categoría</label>
-                  <input
-                    type="text"
-                    required
-                    value={catNombre}
-                    onChange={(e) => setCatNombre(e.target.value)}
-                    placeholder="Ej. Kjaras, Guarniciones, Refrescos"
-                    className="mt-1 w-full px-3 py-2 bg-[#100f0e] border border-[#2b2520] rounded-xl text-xs text-white focus:outline-none focus:border-amber-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs text-[#ede7dc]">Descripción Breve</label>
-                  <input
-                    type="text"
-                    value={catDescripcion}
-                    onChange={(e) => setCatDescripcion(e.target.value)}
-                    placeholder="Descripción opcional..."
-                    className="mt-1 w-full px-3 py-2 bg-[#100f0e] border border-[#2b2520] rounded-xl text-xs text-white focus:outline-none focus:border-amber-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs text-[#ede7dc]">Orden en Carta</label>
-                  <input
-                    type="number"
-                    value={catOrden}
-                    onChange={(e) => setCatOrden(e.target.value)}
-                    className="mt-1 w-full px-3 py-2 bg-[#100f0e] border border-[#2b2520] rounded-xl text-xs text-white num-tabular focus:outline-none focus:border-amber-600"
-                  />
-                </div>
-
-                <div className="flex items-center gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setModalCategoriaAbierto(false)}
-                    className="w-1/2 py-2.5 rounded-xl bg-[#26211c] hover:bg-[#332c25] text-[#ede7dc] font-semibold text-xs transition"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={guardando}
-                    className="w-1/2 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs transition"
-                  >
-                    {guardando
-                      ? 'Guardando...'
-                      : categoriaEditando
-                      ? 'Actualizar'
-                      : 'Crear Categoría'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal Eliminar Categoría */}
-      <AnimatePresence>
-        {categoriaParaEliminar && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.94, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.94, opacity: 0 }}
-              className="bg-[#181614] border border-[#2e2721] rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl text-center"
-            >
-              <div className="w-12 h-12 rounded-2xl bg-rose-950/60 border border-rose-800/40 text-rose-400 flex items-center justify-center mx-auto">
-                <AlertTriangle className="w-6 h-6" />
-              </div>
-
-              <div>
-                <h3 className="text-base font-bold text-white">¿Eliminar Categoría?</h3>
-                <p className="text-xs text-[#9c907f] mt-1.5">
-                  Estás a punto de eliminar la categoría <strong className="text-white">{categoriaParaEliminar.nombre}</strong>. Solo es posible si no contiene platos asociados.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setCategoriaParaEliminar(null)}
-                  disabled={eliminandoCategoria}
-                  className="w-1/2 py-2.5 rounded-xl bg-[#26211c] hover:bg-[#332c25] text-[#ede7dc] font-semibold text-xs transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmarEliminarCategoria}
-                  disabled={eliminandoCategoria}
-                  className="w-1/2 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-600/20 transition"
-                >
-                  {eliminandoCategoria ? 'Eliminando...' : 'Sí, Eliminar'}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              {eliminandoCategoria ? 'Eliminando…' : 'Sí, eliminar'}
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex items-start gap-3 p-5">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-[11px] border border-danger/35 bg-danger/12 text-danger">
+            <AlertTriangle className="size-5" strokeWidth={2.25} aria-hidden />
+          </span>
+          <p className="text-[13px] leading-5 text-ink-soft">
+            Se eliminará la categoría{' '}
+            <strong className="font-semibold text-ink">{categoriaParaEliminar?.nombre}</strong>. Solo
+            es posible si no tiene platos asociados.
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 }

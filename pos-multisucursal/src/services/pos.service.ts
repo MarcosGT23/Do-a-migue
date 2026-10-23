@@ -11,6 +11,20 @@ export interface ItemCarritoDTO {
     notas?: string;
 }
 
+/**
+ * Ítem del editable de pedidos. `tipos_corte` es opcional: solo lo usan los
+ * platos "mixto" (completo, costilla, matahambre, chuleta) y admite varios
+ * cortes a la vez.
+ */
+export interface ItemEdicionDTO {
+    producto_id: number;
+    cantidad: number;
+    precio_unitario: number;
+    descuento_item?: number;
+    notas?: string;
+    tipos_corte?: string[];
+}
+
 /** Flag `Secure` solo cuando se navega por HTTPS (en local por http no aplica). */
 function secureFlag(): string {
     return typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : '';
@@ -88,7 +102,6 @@ export const PosService = {
         apertura_caja_id: number;
         usuario_id: string;
         cliente_nombre: string;
-        numero_mesa: number | null;
         descuento_global: number;
         items: ItemCarritoDTO[];
     }) {
@@ -96,12 +109,47 @@ export const PosService = {
             p_apertura_caja_id: params.apertura_caja_id,
             p_usuario_id: params.usuario_id,
             p_cliente_nombre: params.cliente_nombre,
-            p_numero_mesa: params.numero_mesa,
-            p_descuento_global: params.descuento_global,
+            // La RPC exige el parámetro, pero el POS ya no usa el número de mesa:
+            // la ficha del turno la asigna la base de datos.
+            p_numero_mesa: null,
+            // La RPC inserta la cabecera antes del detalle (subtotal 0), así que
+            // un descuento aquí rompe "chk_descuento_valido". Se aplica después.
+            p_descuento_global: 0,
             p_items: params.items,
         });
         if (error) throw new Error(error.message);
-        return data as number;
+
+        const pedidoId = data as number;
+        if (params.descuento_global > 0) {
+            await this.aplicarDescuentoPedido({
+                pedido_id: pedidoId,
+                descuento: params.descuento_global,
+            });
+        }
+        return pedidoId;
+    },
+
+    async aplicarDescuentoPedido(params: { pedido_id: number; descuento: number }) {
+        const res = await fetch('/api/pedidos/descuento', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+            throw new Error(data.error || 'No se pudo aplicar el descuento.');
+        }
+        return data.pedido;
+    },
+
+    /** Número de ficha del turno (se reinicia en cada caja abierta). */
+    async obtenerFicha(pedidoId: number) {
+        const res = await fetch(`/api/pedidos/ficha?pedidoId=${pedidoId}`);
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+            throw new Error(data.error || 'No se pudo obtener la ficha.');
+        }
+        return data.numero_ficha as number | null;
     },
 
     async registrarPago(params: {
@@ -141,16 +189,9 @@ export const PosService = {
     async editarPedido(params: {
         pedido_id: number;
         cliente_nombre: string;
-        numero_mesa: number | null;
         descuento: number;
         metodo_pago?: string;
-        items: Array<{
-            producto_id: number;
-            cantidad: number;
-            precio_unitario: number;
-            descuento_item?: number;
-            notas?: string;
-        }>;
+        items: ItemEdicionDTO[];
     }) {
         const res = await fetch('/api/pedidos/editar', {
             method: 'POST',

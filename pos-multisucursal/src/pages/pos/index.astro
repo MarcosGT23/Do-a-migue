@@ -46,6 +46,8 @@ const { data: inventarioProductos } = await sesion.supabaseSSR
   `)
   .eq('sucursal_id', sesion.sucursalId);
 
+const ordenCategorias = new Map((categorias || []).map((categoria: any, indice: number) => [categoria.id, indice]));
+
 const productosFormateados = (inventarioProductos || [])
   .filter((row: any) => row.productos?.activo)
   .map((row: any) => ({
@@ -56,7 +58,13 @@ const productosFormateados = (inventarioProductos || [])
     imagen_url: row.productos.imagen_url,
     stock_actual: row.stock_actual,
     stock_minimo: row.stock_minimo,
-  }));
+  }))
+  .sort((a: any, b: any) => {
+    const ordenA = ordenCategorias.get(a.categoria_id) ?? Number.MAX_SAFE_INTEGER;
+    const ordenB = ordenCategorias.get(b.categoria_id) ?? Number.MAX_SAFE_INTEGER;
+    if (ordenA !== ordenB) return ordenA - ordenB;
+    return a.nombre.localeCompare(b.nombre, 'es');
+  });
 ---
 
 <PosLayout title="Catálogo y Caja">

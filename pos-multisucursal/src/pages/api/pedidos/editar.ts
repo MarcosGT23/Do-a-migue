@@ -1,6 +1,8 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdminServer } from '../../../core/supabaseAdminServer';
 import { obtenerContextoSesion } from '../../../core/sessionContext';
+import { existeColumnaTipoCorte } from '../../../core/columnaTipoCorte';
+import { formatearCortes } from '../../../core/tiposCorte';
 
 export const prerender = false;
 
@@ -17,7 +19,6 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     const body = await request.json();
     const pedidoId = Number(body.pedido_id);
     const clienteNombre = (body.cliente_nombre || 'Cliente Mostrador').trim();
-    const numeroMesa = body.numero_mesa ? Number(body.numero_mesa) : null;
     const descuentoGlobal = Math.max(0, parseFloat(body.descuento) || 0);
     const items = body.items || [];
     const metodoPago = body.metodo_pago;
@@ -37,9 +38,11 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     }
 
     // 1. Obtener el pedido actual y sus detalles
+    const conCorte = await existeColumnaTipoCorte();
+
     const { data: pedidoActual, error: errPed } = await supabaseAdminServer
       .from('pedidos')
-      .select('*, detalle_pedidos(*), pagos(*)')
+      .select(`*, detalle_pedidos(*), pagos(*)`)
       .eq('id', pedidoId)
       .single();
 
@@ -105,15 +108,24 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       const itemSubtotal = Math.max(0, cantidad * precioUnitario - descItem);
       subtotalCalculado += itemSubtotal;
 
-      return {
+      // OJO: `subtotal` es una columna GENERATED en detalle_pedidos; Postgres
+      // rechaza el insert si se manda un valor (428C9). Se omite para que la
+      // base de datos lo calcule sola.
+      const detalle: Record<string, unknown> = {
         pedido_id: pedidoId,
         producto_id: it.producto_id,
         cantidad,
         precio_unitario: precioUnitario,
         descuento_item: descItem,
-        subtotal: itemSubtotal,
         notas: it.notas || '',
       };
+
+      if (conCorte) {
+        // Varios cortes en la misma línea: 'COSTILLA,MATAHAMBRE'
+        detalle.tipo_corte = formatearCortes(it.tipos_corte);
+      }
+
+      return detalle;
     });
 
     const totalCalculado = Math.max(0, subtotalCalculado - descuentoGlobal);
@@ -123,14 +135,45 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     const { error: insDetErr } = await supabaseAdminServer.from('detalle_pedidos').insert(nuevosDetalles);
     if (insDetErr) {
       console.error('Error insertando nuevos detalle_pedidos:', insDetErr);
+      // El borrado ya se hizo y no hay transacción: se restauran los productos
+      // que tenía el pedido para no dejar la comanda vacía.
+      const restauracion = itemsAnteriores.map((d: any) => {
+        const previo: Record<string, unknown> = {
+          pedido_id: pedidoId,
+          producto_id: d.producto_id,
+          cantidad: d.cantidad,
+          precio_unitario: d.precio_unitario,
+          descuento_item: d.descuento_item,
+          notas: d.notas || '',
+        };
+        if (conCorte && d.tipo_corte) {
+          previo.tipo_corte = d.tipo_corte;
+        }
+        return previo;
+      });
+      if (restauracion.length > 0) {
+        const { error: errRestauracion } = await supabaseAdminServer
+          .from('detalle_pedidos')
+          .insert(restauracion);
+        if (errRestauracion) {
+          console.error('Error restaurando los detalle_pedidos:', errRestauracion);
+        }
+      }
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: 'No se pudieron guardar los productos del pedido: ' + insDetErr.message,
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
-    // 5. Actualizar el pedido
+    // 5. Actualizar el pedido (el número de ficha lo asigna la base de datos
+    //    y no se modifica al editar)
     const { data: pedidoActualizado, error: updPedErr } = await supabaseAdminServer
       .from('pedidos')
       .update({
         cliente_nombre: clienteNombre,
-        numero_mesa: numeroMesa,
         subtotal: subtotalCalculado,
         descuento: descuentoGlobal,
         updated_at: new Date().toISOString(),
@@ -139,7 +182,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       .select(`
         *,
         detalle_pedidos (
-          id, producto_id, cantidad, precio_unitario, descuento_item, subtotal, notas,
+          id, producto_id, cantidad, precio_unitario, descuento_item, subtotal, notas,${
+            conCorte ? ' tipo_corte,' : ''
+          }
           productos ( id, nombre, precio_base, categoria_id, imagen_url )
         ),
         pagos (*),

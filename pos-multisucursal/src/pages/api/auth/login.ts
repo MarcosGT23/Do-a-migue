@@ -64,7 +64,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     const userId = authData.user.id;
 
     // 3. Consultar perfil en tabla public.usuarios usando supabaseAdminServer (con service_role key intacta)
-    const { data: perfil, error: perfilErr } = await supabaseAdminServer
+    const { data: perfil } = await supabaseAdminServer
       .from('usuarios')
       .select('id, nombre_completo, rol, sucursal_id, activo')
       .eq('id', userId)

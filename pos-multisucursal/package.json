@@ -35,5 +35,10 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.5"
-  }
+  },
+  "description": "```sh npm create astro@latest -- --template minimal ```",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

@@ -3,6 +3,7 @@ export const prerender = false;
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import AdminDashboard from '../../components/admin/AdminDashboard';
 import { obtenerContextoSesion } from '../../core/sessionContext';
+import { existeColumnaNumeroFicha } from '../../core/columnaNumeroFicha';
 
 const sesion = await obtenerContextoSesion(Astro.cookies);
 if (!sesion.autenticado) {
@@ -12,12 +13,22 @@ if (!sesion.esAdminOSupervisor) {
   return Astro.redirect('/pos');
 }
 
-const { data: pedidosData } = await sesion.supabaseSSR
+// La columna numero_ficha se agrega con una migración SQL: si todavía no
+// está aplicada, el panel sigue funcionando sin ella.
+const conFicha = await existeColumnaNumeroFicha();
+const camposPedidos = conFicha
+  ? 'id, cliente_nombre, numero_ficha, total, estado, created_at'
+  : 'id, cliente_nombre, total, estado, created_at';
+
+const { data: pedidosDataRaw } = await sesion.supabaseSSR
   .from('pedidos')
-  .select('id, cliente_nombre, numero_mesa, total, estado, created_at')
+  .select(camposPedidos)
   .eq('sucursal_id', sesion.sucursalId)
   .order('created_at', { ascending: false })
   .limit(25);
+
+// El select es dinámico (según exista la columna), por eso se castea.
+const pedidosData = (pedidosDataRaw || []) as any[];
 
 const { data: kardexData } = await sesion.supabaseSSR
   .from('movimientos_inventario')
@@ -49,7 +60,8 @@ const productosStock = (stockData || [])
     nombre: s.productos.nombre,
     stock_actual: s.stock_actual,
     stock_minimo: s.stock_minimo,
-  }));
+  }))
+  .sort((a: any, b: any) => a.nombre.localeCompare(b.nombre, 'es'));
 ---
 
 <AdminLayout title="Dashboard y Kardex">

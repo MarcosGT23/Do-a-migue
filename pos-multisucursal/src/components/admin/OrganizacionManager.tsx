@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { toast, Toaster } from 'sonner';
 import {
   Building2, Users, Plus, Edit3,
-  Phone, MapPin, X, Trash2, AlertTriangle
+  Phone, MapPin, Trash2, AlertTriangle, ShieldCheck,
 } from 'lucide-react';
 import { PosService, type RolUsuario } from '../../services/pos.service';
+import { Button } from '../ui/Button';
+import { IconButton } from '../ui/IconButton';
+import { Badge } from '../ui/Badge';
+import { Modal } from '../ui/Modal';
+import { Field, Input } from '../ui/Field';
 
 interface Sucursal {
   id: number;
@@ -28,6 +33,13 @@ interface Props {
   sucursalesIniciales: Sucursal[];
   usuariosIniciales: Usuario[];
 }
+
+const tonoRol = {
+  ADMIN: 'brasa',
+  SUPERVISOR: 'alerta',
+  CAJERO: 'ok',
+  MESERO: 'neutro',
+} as const;
 
 export default function OrganizacionManager({
   sucursalesIniciales,
@@ -191,423 +203,447 @@ export default function OrganizacionManager({
     });
   };
 
+  const activas = sucursales.filter((s) => s.activa).length;
+
   return (
-    <div className="p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
       <Toaster position="top-right" richColors theme="dark" />
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Cabecera */}
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <span className="text-xs font-semibold text-amber-500 uppercase tracking-wide">
-            Estructura Organizacional
-          </span>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight mt-0.5">
-            Sucursales y Personal
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-ember">
+            Estructura organizacional
+          </p>
+          <h1 className="mt-1 text-[22px] font-extrabold leading-tight tracking-[-0.025em] text-ink sm:text-[26px]">
+            Sucursales y personal
           </h1>
-          <p className="text-xs text-[#9c907f] mt-1">
-            Gestión de puntos de venta y asignación de roles operativos.
+          <p className="mt-1 max-w-xl text-[12.5px] leading-5 text-ink-muted">
+            Puntos de venta, roles operativos y acceso a cada sucursal.
+          </p>
+          <p className="mt-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-faint">
+            {sucursales.length} sucursales · {activas} operativas · {usuarios.length} operadores
           </p>
         </div>
 
         {tab === 'SUCURSALES' && (
-          <button
+          <Button
             onClick={abrirCrearSucursal}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs font-bold shadow-lg shadow-orange-600/20 transition self-start"
+            icono={<Plus className="size-4" strokeWidth={2.5} />}
+            className="self-start sm:self-auto"
           >
-            <Plus className="w-4 h-4" />
-            <span>Nueva Sucursal</span>
-          </button>
+            Nueva sucursal
+          </Button>
         )}
+      </header>
+
+      {/* Pestañas */}
+      <div
+        role="tablist"
+        aria-label="Secciones de la organización"
+        className="mt-5 flex w-full items-center gap-0.5 rounded-field border border-line-strong bg-card p-0.5 sm:w-auto sm:self-start"
+      >
+        {(
+          [
+            { id: 'SUCURSALES', label: 'Sucursales', n: sucursales.length, Icono: Building2 },
+            { id: 'USUARIOS', label: 'Personal y roles', n: usuarios.length, Icono: Users },
+          ] as const
+        ).map(({ id, label, n, Icono }) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={tab === id}
+            aria-controls={`panel-${id}`}
+            onClick={() => setTab(id)}
+            className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-[7px] px-3 text-[12.5px] font-semibold transition-colors sm:flex-none ${
+              tab === id ? 'bg-raised text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
+            }`}
+          >
+            <Icono className="size-4" strokeWidth={2.25} aria-hidden />
+            {label}
+            <span className="font-mono text-[10.5px] text-ink-faint tnum">{n}</span>
+          </button>
+        ))}
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-3 border-b border-[#26211c] pb-3">
-        <button
-          onClick={() => setTab('SUCURSALES')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
-            tab === 'SUCURSALES'
-              ? 'bg-amber-600/20 text-amber-300 border border-amber-600/40'
-              : 'text-[#9c907f] hover:text-white'
-          }`}
-        >
-          <Building2 className="w-4 h-4" />
-          <span>Sucursales ({sucursales.length})</span>
-        </button>
-        <button
-          onClick={() => setTab('USUARIOS')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
-            tab === 'USUARIOS'
-              ? 'bg-amber-600/20 text-amber-300 border border-amber-600/40'
-              : 'text-[#9c907f] hover:text-white'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>Personal y Roles ({usuarios.length})</span>
-        </button>
-      </div>
-
-      {/* TAB SUCURSALES */}
+      {/* Sucursales */}
       {tab === 'SUCURSALES' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <section
+          id="panel-SUCURSALES"
+          role="tabpanel"
+          className="mt-3 grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3"
+        >
           {sucursales.map((suc) => (
-            <motion.div
+            <motion.article
               layout
               key={suc.id}
-              className="p-5 rounded-2xl bg-[#1a1715] border border-[#2b2520] space-y-4 shadow-lg hover:border-[#473c33] transition"
+              className={`flex flex-col rounded-card border bg-card p-4 transition-colors ${
+                suc.activa ? 'border-line-strong hover:border-ember/40' : 'border-line border-dashed'
+              }`}
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider num-tabular">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.1em] text-ember tnum">
                     Sucursal #{suc.id}
                   </span>
-                  <h3 className="text-base font-bold text-white mt-0.5">{suc.nombre}</h3>
+                  <h2
+                    className={`mt-0.5 truncate text-[15px] font-bold tracking-[-0.01em] ${
+                      suc.activa ? 'text-ink' : 'text-ink-muted'
+                    }`}
+                  >
+                    {suc.nombre}
+                  </h2>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <button
+                <div className="flex shrink-0 items-center gap-1">
+                  <IconButton
+                    etiqueta={`Editar ${suc.nombre}`}
+                    tamano="sm"
                     onClick={() => abrirEditarSucursal(suc)}
-                    className="p-1.5 rounded-lg bg-[#100f0e] border border-[#2b2520] text-[#9c907f] hover:text-white hover:border-amber-600 transition"
-                    title="Editar datos de la sucursal"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
+                    icono={<Edit3 className="size-3.5" strokeWidth={2.25} />}
+                  />
+                  <IconButton
+                    etiqueta={`Eliminar ${suc.nombre}`}
+                    tamano="sm"
+                    tono="peligro"
                     onClick={() => setSucursalParaEliminar(suc)}
-                    className="p-1.5 rounded-lg bg-[#100f0e] border border-[#2b2520] text-[#9c907f] hover:text-rose-400 hover:border-rose-800 transition"
-                    title="Eliminar sucursal"
+                    icono={<Trash2 className="size-3.5" strokeWidth={2.25} />}
+                  />
+                </div>
+              </div>
+
+              <dl className="mt-3 space-y-1.5 border-t border-line pt-3 text-[12px]">
+                <div className="flex items-center gap-2">
+                  <dt className="sr-only">Dirección</dt>
+                  <MapPin className="size-3.5 shrink-0 text-ink-faint" strokeWidth={2} aria-hidden />
+                  <dd className="truncate text-ink-soft">
+                    {suc.direccion || 'Sin dirección registrada'}
+                  </dd>
+                </div>
+                <div className="flex items-center gap-2">
+                  <dt className="sr-only">Teléfono</dt>
+                  <Phone className="size-3.5 shrink-0 text-ink-faint" strokeWidth={2} aria-hidden />
+                  <dd className="truncate text-ink-soft">{suc.telefono || 'Sin teléfono'}</dd>
+                </div>
+              </dl>
+
+              <div className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-2.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-ink-muted">
+                  Estado operativo
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={suc.activa}
+                  aria-label={`${suc.nombre}: ${suc.activa ? 'operativa' : 'inactiva'}`}
+                  onClick={() => handleToggleSucursal(suc.id, suc.activa)}
+                  className="flex h-9 items-center gap-2 rounded-full pl-1 pr-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember/40"
+                >
+                  <span
+                    className={`relative h-5 w-9 rounded-full border transition-colors ${
+                      suc.activa ? 'border-ok/50 bg-ok/25' : 'border-line-strong bg-sunken'
+                    }`}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => handleToggleSucursal(suc.id, suc.activa)}
-                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition ${
-                      suc.activa
-                        ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 hover:bg-emerald-900/60'
-                        : 'bg-rose-950/60 text-rose-400 border border-rose-800/40 hover:bg-rose-900/60'
+                    <span
+                      className={`absolute top-0.5 size-3.5 rounded-full transition-all ${
+                        suc.activa ? 'left-[18px] bg-ok' : 'left-0.5 bg-ink-faint'
+                      }`}
+                    />
+                  </span>
+                  <span
+                    className={`text-[11.5px] font-bold uppercase tracking-[0.05em] ${
+                      suc.activa ? 'text-ok' : 'text-ink-muted'
                     }`}
                   >
                     {suc.activa ? 'Operativa' : 'Inactiva'}
-                  </button>
-                </div>
+                  </span>
+                </button>
               </div>
-
-              <div className="space-y-2 text-xs text-[#9c907f] border-t border-[#26211c] pt-3">
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-3.5 h-3.5 text-[#6e6355] shrink-0" />
-                  <span className="truncate">{suc.direccion || 'Sin dirección registrada'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Phone className="w-3.5 h-3.5 text-[#6e6355] shrink-0" />
-                  <span>{suc.telefono || 'Sin teléfono'}</span>
-                </div>
-              </div>
-            </motion.div>
+            </motion.article>
           ))}
-        </div>
+        </section>
       )}
 
-      {/* TAB USUARIOS */}
+      {/* Personal */}
       {tab === 'USUARIOS' && (
-        <div className="bg-[#1a1715] border border-[#2b2520] rounded-2xl overflow-hidden shadow-xl">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-[#29231e] text-[#8c806f] uppercase tracking-wider bg-[#141210]">
-                  <th className="py-3 px-4 font-semibold">Operador</th>
-                  <th className="py-3 px-4 font-semibold">Rol Asignado</th>
-                  <th className="py-3 px-4 font-semibold">Sucursal</th>
-                  <th className="py-3 px-4 font-semibold">Estado</th>
-                  <th className="py-3 px-4 font-semibold text-right">Acción</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#26211c]">
-                {usuarios.map((usr) => {
-                  const suc = sucursales.find((s) => s.id === usr.sucursal_id);
-                  return (
-                    <tr key={usr.id} className="hover:bg-[#201d19] transition">
-                      <td className="py-3 px-4 font-medium text-white">
-                        <div>{usr.nombre_completo}</div>
-                        <span className="text-[10px] text-[#7a6f5f] font-mono truncate block max-w-xs">
-                          {usr.id}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
+        <section
+          id="panel-USUARIOS"
+          role="tabpanel"
+          className="mt-3 overflow-hidden rounded-card border border-line-strong bg-card"
+        >
+          {/* Escritorio */}
+          <table className="hidden w-full border-collapse text-left md:table">
+            <caption className="sr-only">Operadores con su rol, sucursal y estado de la cuenta</caption>
+            <thead>
+              <tr className="border-b border-line bg-sunken text-[10px] uppercase tracking-[0.08em] text-ink-muted">
+                <th scope="col" className="px-4 py-2.5 font-semibold">Operador</th>
+                <th scope="col" className="px-4 py-2.5 font-semibold">Rol</th>
+                <th scope="col" className="px-4 py-2.5 font-semibold">Sucursal</th>
+                <th scope="col" className="px-4 py-2.5 font-semibold">Cuenta</th>
+                <th scope="col" className="px-4 py-2.5 text-right font-semibold">
+                  <span className="sr-only">Acciones</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {usuarios.map((usr) => {
+                const suc = sucursales.find((s) => s.id === usr.sucursal_id);
+                return (
+                  <tr key={usr.id} className="transition-colors hover:bg-raised/60">
+                    <td className="px-4 py-2.5">
+                      <span className="block text-[13px] font-semibold text-ink">
+                        {usr.nombre_completo}
+                      </span>
+                      <span className="block max-w-[220px] truncate font-mono text-[10px] text-ink-faint">
+                        {usr.id}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <Badge tono={tonoRol[usr.rol]}>{usr.rol}</Badge>
+                    </td>
+                    <td className="px-4 py-2.5 text-[12.5px] text-ink-soft">
+                      {suc ? suc.nombre : 'Global / todas'}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span
+                        className={`flex items-center gap-1.5 text-[11.5px] font-semibold ${
+                          usr.activo ? 'text-ok' : 'text-danger'
+                        }`}
+                      >
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            usr.rol === 'ADMIN'
-                              ? 'bg-amber-950/60 text-amber-300 border border-amber-800/40'
-                              : usr.rol === 'SUPERVISOR'
-                              ? 'bg-orange-950/60 text-orange-300 border border-orange-800/40'
-                              : 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40'
-                          }`}
-                        >
-                          {usr.rol}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-[#ede7dc]">
-                        {suc ? suc.nombre : 'Global / Todas'}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`text-[11px] font-semibold ${
-                            usr.activo ? 'text-emerald-400' : 'text-rose-400'
-                          }`}
-                        >
-                          {usr.activo ? 'Habilitado' : 'Bloqueado'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => abrirEditarUsuario(usr)}
-                          className="p-1.5 rounded-lg bg-[#100f0e] border border-[#2b2520] text-[#9c907f] hover:text-white hover:border-amber-600 transition"
-                          title="Modificar rol o sucursal"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                          aria-hidden
+                          className={`size-1.5 rounded-full ${usr.activo ? 'bg-ok' : 'bg-danger'}`}
+                        />
+                        {usr.activo ? 'Habilitado' : 'Bloqueado'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <IconButton
+                        etiqueta={`Editar a ${usr.nombre_completo}`}
+                        tamano="sm"
+                        onClick={() => abrirEditarUsuario(usr)}
+                        icono={<Edit3 className="size-3.5" strokeWidth={2.25} />}
+                        className="ml-auto"
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {/* Móvil */}
+          <ul className="divide-y divide-line md:hidden">
+            {usuarios.map((usr) => {
+              const suc = sucursales.find((s) => s.id === usr.sucursal_id);
+              return (
+                <li key={usr.id} className="flex items-start gap-3 p-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-[13px] font-semibold text-ink">
+                        {usr.nombre_completo}
+                      </span>
+                      <Badge tono={tonoRol[usr.rol]}>{usr.rol}</Badge>
+                    </div>
+                    <p className="mt-0.5 truncate text-[11.5px] text-ink-muted">
+                      {suc ? suc.nombre : 'Global / todas'} ·{' '}
+                      <span className={usr.activo ? 'text-ok' : 'text-danger'}>
+                        {usr.activo ? 'habilitado' : 'bloqueado'}
+                      </span>
+                    </p>
+                  </div>
+                  <IconButton
+                    etiqueta={`Editar a ${usr.nombre_completo}`}
+                    tamano="sm"
+                    onClick={() => abrirEditarUsuario(usr)}
+                    icono={<Edit3 className="size-3.5" strokeWidth={2.25} />}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       )}
 
-      {/* Modal Crear / Editar Sucursal */}
-      <AnimatePresence>
-        {modalSucursalAbierto && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.94, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.94, opacity: 0 }}
-              className="bg-[#181614] border border-[#2e2721] rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl"
+      {/* Crear / editar sucursal */}
+      <Modal
+        abierto={modalSucursalAbierto}
+        onCerrar={() => setModalSucursalAbierto(false)}
+        titulo={sucursalEditando ? 'Editar sucursal' : 'Nueva sucursal'}
+        descripcion="Cada sucursal opera su propia caja, turnos e inventario."
+        posicion="centro"
+        ancho="md"
+        pie={
+          <div className="flex items-center gap-2">
+            <Button variante="secundaria" onClick={() => setModalSucursalAbierto(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" form="form-sucursal" bloque cargando={guardandoSucursal}>
+              {guardandoSucursal
+                ? 'Guardando…'
+                : sucursalEditando
+                  ? 'Actualizar sucursal'
+                  : 'Crear sucursal'}
+            </Button>
+          </div>
+        }
+      >
+        <form id="form-sucursal" onSubmit={handleGuardarSucursal} className="space-y-4 p-5">
+          <Field etiqueta="Nombre" htmlFor="suc-nombre">
+            <Input
+              id="suc-nombre"
+              type="text"
+              required
+              value={sucNombre}
+              onChange={(e) => setSucNombre(e.target.value)}
+              placeholder="Ej. Sucursal Central, Prado"
+            />
+          </Field>
+          <Field etiqueta="Dirección" htmlFor="suc-direccion">
+            <Input
+              id="suc-direccion"
+              type="text"
+              required
+              value={sucDireccion}
+              onChange={(e) => setSucDireccion(e.target.value)}
+              placeholder="Av. Blanco Galindo Km 4"
+            />
+          </Field>
+          <Field etiqueta="Teléfono" htmlFor="suc-telefono">
+            <Input
+              id="suc-telefono"
+              type="tel"
+              required
+              value={sucTelefono}
+              onChange={(e) => setSucTelefono(e.target.value)}
+              placeholder="+591 70000000"
+            />
+          </Field>
+        </form>
+      </Modal>
+
+      {/* Eliminar sucursal */}
+      <Modal
+        abierto={!!sucursalParaEliminar}
+        onCerrar={() => setSucursalParaEliminar(null)}
+        titulo="¿Eliminar sucursal?"
+        posicion="centro"
+        ancho="ajustado"
+        pie={
+          <div className="flex items-center gap-2">
+            <Button
+              variante="secundaria"
+              onClick={() => setSucursalParaEliminar(null)}
+              disabled={eliminandoSucursal}
             >
-              <div className="flex justify-between items-center">
-                <h3 className="text-base font-bold text-white">
-                  {sucursalEditando ? 'Editar Sucursal' : 'Nueva Sucursal'}
-                </h3>
-                <button
-                  onClick={() => setModalSucursalAbierto(false)}
-                  className="text-[#7a6f5f] hover:text-white"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <form onSubmit={handleGuardarSucursal} className="space-y-3.5">
-                <div>
-                  <label className="text-xs text-[#ede7dc]">Nombre de la Sucursal</label>
-                  <input
-                    type="text"
-                    required
-                    value={sucNombre}
-                    onChange={(e) => setSucNombre(e.target.value)}
-                    placeholder="Ej. Sucursal Central, Prado"
-                    className="mt-1 w-full px-3 py-2 bg-[#100f0e] border border-[#2b2520] rounded-xl text-xs text-white focus:outline-none focus:border-amber-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs text-[#ede7dc]">Dirección</label>
-                  <input
-                    type="text"
-                    required
-                    value={sucDireccion}
-                    onChange={(e) => setSucDireccion(e.target.value)}
-                    placeholder="Av. Blanco Galindo Km 4"
-                    className="mt-1 w-full px-3 py-2 bg-[#100f0e] border border-[#2b2520] rounded-xl text-xs text-white focus:outline-none focus:border-amber-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs text-[#ede7dc]">Teléfono de Contacto</label>
-                  <input
-                    type="text"
-                    required
-                    value={sucTelefono}
-                    onChange={(e) => setSucTelefono(e.target.value)}
-                    placeholder="+591 70000000"
-                    className="mt-1 w-full px-3 py-2 bg-[#100f0e] border border-[#2b2520] rounded-xl text-xs text-white focus:outline-none focus:border-amber-600"
-                  />
-                </div>
-
-                <div className="flex items-center gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setModalSucursalAbierto(false)}
-                    className="w-1/2 py-2.5 rounded-xl bg-[#26211c] hover:bg-[#332c25] text-[#ede7dc] font-semibold text-xs transition"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={guardandoSucursal}
-                    className="w-1/2 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-lg shadow-orange-600/20 transition"
-                  >
-                    {guardandoSucursal
-                      ? 'Guardando...'
-                      : sucursalEditando
-                      ? 'Actualizar Sucursal'
-                      : 'Crear Sucursal'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal Confirmar Eliminar Sucursal */}
-      <AnimatePresence>
-        {sucursalParaEliminar && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.94, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.94, opacity: 0 }}
-              className="bg-[#181614] border border-[#2e2721] rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl text-center"
+              Cancelar
+            </Button>
+            <Button
+              variante="peligro"
+              bloque
+              cargando={eliminandoSucursal}
+              onClick={handleEliminarSucursal}
+              icono={<Trash2 className="size-4" strokeWidth={2.25} />}
             >
-              <div className="w-12 h-12 rounded-2xl bg-rose-950/60 border border-rose-800/40 text-rose-400 flex items-center justify-center mx-auto">
-                <AlertTriangle className="w-6 h-6" />
-              </div>
+              {eliminandoSucursal ? 'Eliminando…' : 'Sí, eliminar'}
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex items-start gap-3 p-5">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-[11px] border border-danger/35 bg-danger/12 text-danger">
+            <AlertTriangle className="size-5" strokeWidth={2.25} aria-hidden />
+          </span>
+          <p className="text-[13px] leading-5 text-ink-soft">
+            Se eliminará <strong className="font-semibold text-ink">{sucursalParaEliminar?.nombre}</strong>.
+            Si tiene pedidos o turnos registrados, se deshabilitará para proteger la auditoría.
+          </p>
+        </div>
+      </Modal>
 
-              <div>
-                <h3 className="text-base font-bold text-white">¿Eliminar Sucursal?</h3>
-                <p className="text-xs text-[#9c907f] mt-1.5">
-                  Estás a punto de eliminar <strong className="text-white">{sucursalParaEliminar.nombre}</strong>. Si tiene pedidos o turnos registrados, será deshabilitada para proteger los registros de auditoría.
-                </p>
-              </div>
+      {/* Editar operador */}
+      <Modal
+        abierto={modalUsuarioAbierto}
+        onCerrar={() => setModalUsuarioAbierto(false)}
+        titulo="Editar operador"
+        descripcion="El rol define a qué panel entra y qué puede modificar."
+        posicion="centro"
+        ancho="md"
+        pie={
+          <div className="flex items-center gap-2">
+            <Button variante="secundaria" onClick={() => setModalUsuarioAbierto(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" form="form-operador" bloque cargando={guardandoUsuario}>
+              {guardandoUsuario ? 'Actualizando…' : 'Guardar cambios'}
+            </Button>
+          </div>
+        }
+      >
+        <form id="form-operador" onSubmit={handleGuardarUsuario} className="space-y-4 p-5">
+          <Field etiqueta="Nombre completo" htmlFor="usr-nombre">
+            <Input
+              id="usr-nombre"
+              type="text"
+              required
+              value={usrNombre}
+              onChange={(e) => setUsrNombre(e.target.value)}
+            />
+          </Field>
 
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setSucursalParaEliminar(null)}
-                  disabled={eliminandoSucursal}
-                  className="w-1/2 py-2.5 rounded-xl bg-[#26211c] hover:bg-[#332c25] text-[#ede7dc] font-semibold text-xs transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={handleEliminarSucursal}
-                  disabled={eliminandoSucursal}
-                  className="w-1/2 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-600/20 transition"
-                >
-                  {eliminandoSucursal ? 'Eliminando...' : 'Sí, Eliminar'}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          <div className="grid grid-cols-2 gap-3">
+            <Field etiqueta="Rol" htmlFor="usr-rol">
+              <select
+                id="usr-rol"
+                value={usrRol}
+                onChange={(e) => setUsrRol(e.target.value as RolUsuario)}
+                className="h-11 w-full rounded-field border border-line-strong bg-sunken px-2.5 text-[13.5px] text-ink transition-colors hover:border-control focus-visible:border-ember focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember/25"
+              >
+                <option value="ADMIN">Administrador</option>
+                <option value="SUPERVISOR">Supervisor</option>
+                <option value="CAJERO">Cajero</option>
+                <option value="MESERO">Mesero</option>
+              </select>
+            </Field>
 
-      {/* Modal Editar Operador */}
-      <AnimatePresence>
-        {modalUsuarioAbierto && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            <Field etiqueta="Sucursal" htmlFor="usr-sucursal">
+              <select
+                id="usr-sucursal"
+                value={usrSucursalId || ''}
+                onChange={(e) => setUsrSucursalId(e.target.value ? Number(e.target.value) : null)}
+                className="h-11 w-full rounded-field border border-line-strong bg-sunken px-2.5 text-[13.5px] text-ink transition-colors hover:border-control focus-visible:border-ember focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember/25"
+              >
+                <option value="">Todas / global</option>
+                {sucursales.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nombre}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+
+          <label
+            htmlFor="usr-activo"
+            className="flex cursor-pointer items-start gap-2.5 rounded-field border border-line bg-sunken px-3 py-2.5"
           >
-            <motion.div
-              initial={{ scale: 0.94, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.94, opacity: 0 }}
-              className="bg-[#181614] border border-[#2e2721] rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl"
-            >
-              <div className="flex justify-between items-center">
-                <h3 className="text-base font-bold text-white">Editar Operador</h3>
-                <button
-                  onClick={() => setModalUsuarioAbierto(false)}
-                  className="text-[#7a6f5f] hover:text-white"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+            <input
+              id="usr-activo"
+              type="checkbox"
+              checked={usrActivo}
+              onChange={(e) => setUsrActivo(e.target.checked)}
+              className="mt-0.5 size-4 shrink-0 accent-ember"
+            />
+            <span className="text-[12.5px] leading-5 text-ink-soft">
+              Cuenta habilitada para operar
+            </span>
+          </label>
 
-              <form onSubmit={handleGuardarUsuario} className="space-y-3.5">
-                <div>
-                  <label className="text-xs text-[#ede7dc]">Nombre Completo</label>
-                  <input
-                    type="text"
-                    required
-                    value={usrNombre}
-                    onChange={(e) => setUsrNombre(e.target.value)}
-                    className="mt-1 w-full px-3 py-2 bg-[#100f0e] border border-[#2b2520] rounded-xl text-xs text-white focus:outline-none focus:border-amber-600"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-[#ede7dc]">Rol del Sistema</label>
-                    <select
-                      value={usrRol}
-                      onChange={(e) => setUsrRol(e.target.value as RolUsuario)}
-                      className="mt-1 w-full px-3 py-2 bg-[#100f0e] border border-[#2b2520] rounded-xl text-xs text-white focus:outline-none focus:border-amber-600"
-                    >
-                      <option value="ADMIN">ADMIN</option>
-                      <option value="SUPERVISOR">SUPERVISOR</option>
-                      <option value="CAJERO">CAJERO</option>
-                      <option value="MESERO">MESERO</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-[#ede7dc]">Sucursal Asignada</label>
-                    <select
-                      value={usrSucursalId || ''}
-                      onChange={(e) =>
-                        setUsrSucursalId(e.target.value ? Number(e.target.value) : null)
-                      }
-                      className="mt-1 w-full px-3 py-2 bg-[#100f0e] border border-[#2b2520] rounded-xl text-xs text-white focus:outline-none focus:border-amber-600"
-                    >
-                      <option value="">(Todas / Global)</option>
-                      {sucursales.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.nombre}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 pt-2">
-                  <input
-                    type="checkbox"
-                    id="usrActivoCheck"
-                    checked={usrActivo}
-                    onChange={(e) => setUsrActivo(e.target.checked)}
-                    className="rounded bg-[#100f0e] border-[#2b2520] text-amber-600 focus:ring-0"
-                  />
-                  <label htmlFor="usrActivoCheck" className="text-xs text-[#ede7dc] select-none">
-                    Cuenta activa y habilitada para operar
-                  </label>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={guardandoUsuario}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs transition"
-                >
-                  {guardandoUsuario ? 'Actualizando...' : 'Guardar Cambios'}
-                </button>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          <p className="flex items-center gap-1.5 font-mono text-[10.5px] text-ink-faint">
+            <ShieldCheck className="size-3.5 text-ok" strokeWidth={2.5} aria-hidden />
+            {usuarioEditando?.id}
+          </p>
+        </form>
+      </Modal>
     </div>
   );
 }

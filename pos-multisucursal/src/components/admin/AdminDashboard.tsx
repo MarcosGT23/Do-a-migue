@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { toast, Toaster } from 'sonner';
 import {
   TrendingUp, AlertOctagon, Ban, ArrowUpRight,
-  ArrowDownRight, ShieldAlert, PlusCircle, History, X
+  ArrowDownRight, ShieldAlert, PlusCircle, History,
 } from 'lucide-react';
 import { PosService, type TipoMovimientoInv } from '../../services/pos.service';
+import { Button } from '../ui/Button';
+import { Badge } from '../ui/Badge';
+import { Modal } from '../ui/Modal';
+import { Field, Input, Textarea } from '../ui/Field';
 
 interface PedidoDashboard {
   id: number;
   cliente_nombre: string;
-  numero_mesa: number | null;
+  /** Ficha del turno (se reinicia en cada caja abierta). */
+  numero_ficha?: number | null;
   total: number;
   estado: 'PENDIENTE' | 'PAGADO' | 'ANULADO';
   created_at: string;
@@ -33,6 +37,20 @@ interface Props {
   pedidosIniciales: PedidoDashboard[];
   kardexInicial: MovimientoKardex[];
   productosStock: { id: number; nombre: string; stock_actual: number; stock_minimo: number }[];
+}
+
+const tonoEstado = {
+  PAGADO: 'ok',
+  PENDIENTE: 'brasa',
+  ANULADO: 'peligro',
+} as const;
+
+function esEntrada(tipo: string) {
+  return tipo.includes('ENTRADA') || tipo.includes('DEVOLUCION');
+}
+
+function hora(iso: string) {
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 export default function AdminDashboard({
@@ -62,6 +80,38 @@ export default function AdminDashboard({
     .reduce((acc, p) => acc + Number(p.total), 0);
   const totalAnulados = pedidos.filter((p) => p.estado === 'ANULADO').length;
   const productosCriticos = productosStock.filter((p) => p.stock_actual <= p.stock_minimo);
+
+  const metricas = [
+    {
+      etiqueta: 'Ventas netas del turno',
+      valor: `Bs ${totalRecaudado.toFixed(2)}`,
+      nota: 'Comandas cobradas en caja',
+      Icono: TrendingUp,
+      acento: 'text-ink',
+      principal: true,
+    },
+    {
+      etiqueta: 'Comandas emitidas',
+      valor: String(pedidos.length),
+      nota: 'Registradas en el turno',
+      Icono: History,
+      acento: 'text-ink',
+    },
+    {
+      etiqueta: 'Comandas anuladas',
+      valor: String(totalAnulados),
+      nota: 'Reversiones registradas',
+      Icono: Ban,
+      acento: totalAnulados > 0 ? 'text-danger' : 'text-ink',
+    },
+    {
+      etiqueta: 'Stock crítico',
+      valor: String(productosCriticos.length),
+      nota: 'Platos bajo el mínimo',
+      Icono: AlertOctagon,
+      acento: productosCriticos.length > 0 ? 'text-warn' : 'text-ink',
+    },
+  ];
 
   // Ejecutar Anulación
   const confirmarAnulacion = async (e: React.SyntheticEvent) => {
@@ -113,364 +163,395 @@ export default function AdminDashboard({
   };
 
   return (
-    <div className="p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
       <Toaster position="top-right" richColors theme="dark" />
 
-      {/* Cabecera y Acción Rápida */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Cabecera */}
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <span className="text-xs font-semibold text-amber-500 tracking-wide uppercase">
-            Sucursal #{sucursalId} • Control Operativo
-          </span>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight mt-0.5">
-            Monitor de Ventas y Kardex
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-ember">
+            Sucursal #{sucursalId} · turno en curso
+          </p>
+          <h1 className="mt-1 text-[22px] font-extrabold leading-tight tracking-[-0.025em] text-ink sm:text-[26px]">
+            Monitor de ventas y Kardex
           </h1>
+          <p className="mt-1 max-w-xl text-[12.5px] leading-5 text-ink-muted">
+            Recaudación, comandas del turno y trazabilidad de inventario en tiempo real.
+          </p>
         </div>
 
-        <button
+        <Button
           onClick={() => setModalAjusteAbierto(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs font-bold shadow-lg shadow-orange-600/20 transition self-start"
+          icono={<PlusCircle className="size-4" strokeWidth={2.5} />}
+          className="self-start sm:self-auto"
         >
-          <PlusCircle className="w-4 h-4" />
-          <span>Ajustar Stock / Entrada</span>
-        </button>
+          Ajustar stock
+        </Button>
+      </header>
+
+      {/* Métricas */}
+      <div className="mt-5 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+        {metricas.map(({ etiqueta, valor, nota, Icono, acento, principal }) => (
+          <section
+            key={etiqueta}
+            className={`flex flex-col justify-between rounded-card border border-line-strong bg-card p-3.5 sm:p-4 ${
+              principal ? 'col-span-2 lg:col-span-1' : ''
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <h2 className="text-[11px] font-semibold uppercase tracking-[0.07em] text-ink-muted">
+                {etiqueta}
+              </h2>
+              <Icono className="size-4 shrink-0 text-ink-faint" strokeWidth={2} aria-hidden />
+            </div>
+            <p
+              className={`mt-2.5 font-mono font-bold tracking-[-0.02em] tnum ${acento} ${
+                principal ? 'text-[26px] sm:text-[28px]' : 'text-[22px] sm:text-[24px]'
+              }`}
+            >
+              {valor}
+            </p>
+            <p className="mt-1 text-[11.5px] leading-4 text-ink-faint">{nota}</p>
+          </section>
+        ))}
       </div>
 
-      {/* Tarjetas de Métricas */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-2xl bg-[#1a1715] border border-[#2b2520] space-y-2">
-          <div className="flex justify-between items-center text-[#9c907f] text-xs">
-            <span>Ventas Netas Turno</span>
-            <div className="p-1.5 rounded-lg bg-emerald-950/60 border border-emerald-800/40 text-emerald-400">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-extrabold text-white num-tabular">Bs {totalRecaudado.toFixed(2)}</p>
-          <span className="text-[11px] text-[#7a6f5f]">Comandas cobradas en caja</span>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-[#1a1715] border border-[#2b2520] space-y-2">
-          <div className="flex justify-between items-center text-[#9c907f] text-xs">
-            <span>Comandas Emitidas</span>
-            <div className="p-1.5 rounded-lg bg-amber-950/60 border border-amber-800/40 text-amber-400">
-              <History className="w-4 h-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-extrabold text-white num-tabular">{pedidos.length}</p>
-          <span className="text-[11px] text-[#7a6f5f]">Total registradas en turno</span>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-[#1a1715] border border-[#2b2520] space-y-2">
-          <div className="flex justify-between items-center text-[#9c907f] text-xs">
-            <span>Comandas Anuladas</span>
-            <div className="p-1.5 rounded-lg bg-rose-950/60 border border-rose-800/40 text-rose-400">
-              <Ban className="w-4 h-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-extrabold text-rose-400 num-tabular">{totalAnulados}</p>
-          <span className="text-[11px] text-[#7a6f5f]">Reversiones registradas</span>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-[#1a1715] border border-[#2b2520] space-y-2">
-          <div className="flex justify-between items-center text-[#9c907f] text-xs">
-            <span>Stock Crítico</span>
-            <div className="p-1.5 rounded-lg bg-orange-950/60 border border-orange-800/40 text-amber-400">
-              <AlertOctagon className="w-4 h-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-extrabold text-amber-400 num-tabular">{productosCriticos.length}</p>
-          <span className="text-[11px] text-[#7a6f5f]">Platos bajo nivel mínimo</span>
-        </div>
-      </div>
-
-      {/* Grilla Principal: Pedidos Recientes & Kardex */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Tabla de Pedidos */}
-        <div className="bg-[#1a1715] border border-[#2b2520] rounded-2xl overflow-hidden shadow-xl">
-          <div className="p-4 border-b border-[#2b2520] flex justify-between items-center">
-            <h2 className="font-bold text-sm text-white">Últimas Comandas de Turno</h2>
-            <span className="text-[11px] text-[#7a6f5f]">Top 25 registros</span>
+      {/* Paneles */}
+      <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
+        {/* Comandas */}
+        <section className="overflow-hidden rounded-card border border-line-strong bg-card">
+          <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+            <h2 className="text-[13.5px] font-bold tracking-[-0.01em] text-ink">
+              Últimas comandas del turno
+            </h2>
+            <span className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-faint">
+              top 25
+            </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-[#29231e] text-[#8c806f] uppercase tracking-wider bg-[#141210]">
-                  <th className="py-3 px-4 font-semibold">Comanda</th>
-                  <th className="py-3 px-4 font-semibold">Cliente</th>
-                  <th className="py-3 px-4 font-semibold">Total</th>
-                  <th className="py-3 px-4 font-semibold">Estado</th>
-                  <th className="py-3 px-4 font-semibold text-right">Acción</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#26211c]">
-                {pedidos.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-[#6e6355]">
-                      No hay comandas registradas hoy.
-                    </td>
+          {pedidos.length === 0 ? (
+            <p className="px-4 py-10 text-center text-[12.5px] text-ink-faint">
+              No hay comandas registradas en este turno.
+            </p>
+          ) : (
+            <>
+              {/* Escritorio */}
+              <table className="hidden w-full border-collapse text-left md:table">
+                <caption className="sr-only">Comandas recientes con su estado y total</caption>
+                <thead>
+                  <tr className="border-b border-line bg-sunken text-[10px] uppercase tracking-[0.08em] text-ink-muted">
+                    <th scope="col" className="px-4 py-2.5 font-semibold">Ficha</th>
+                    <th scope="col" className="px-4 py-2.5 font-semibold">Cliente</th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-semibold">Total</th>
+                    <th scope="col" className="px-4 py-2.5 font-semibold">Estado</th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-semibold">
+                      <span className="sr-only">Acciones</span>
+                    </th>
                   </tr>
-                ) : (
-                  pedidos.map((p) => (
-                    <tr key={p.id} className="hover:bg-[#201d19] transition">
-                      <td className="py-3 px-4 font-bold text-amber-400">#{p.id}</td>
-                      <td className="py-3 px-4 text-[#ede7dc]">
-                        <div>{p.cliente_nombre}</div>
-                        {p.numero_mesa && (
-                          <span className="text-[10px] text-[#8c806f]">Mesa {p.numero_mesa}</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 font-bold text-white num-tabular">
-                        Bs {Number(p.total).toFixed(2)}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            p.estado === 'PAGADO'
-                              ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40'
-                              : p.estado === 'ANULADO'
-                              ? 'bg-rose-950/60 text-rose-400 border border-rose-800/40'
-                              : 'bg-amber-950/60 text-amber-400 border border-amber-800/40'
-                          }`}
-                        >
-                          {p.estado}
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {pedidos.map((p) => (
+                    <tr key={p.id} className="transition-colors hover:bg-raised/60">
+                      <td className="px-4 py-2.5">
+                        <span className="font-mono text-[12.5px] font-bold text-ink tnum">
+                          {p.numero_ficha
+                            ? `#${String(p.numero_ficha).padStart(3, '0')}`
+                            : `#${String(p.id).padStart(4, '0')}`}
+                        </span>
+                        <span className="mt-0.5 block font-mono text-[10px] text-ink-faint">
+                          {hora(p.created_at)}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-right">
-                        {p.estado !== 'ANULADO' && (
+                      <td className="max-w-[180px] truncate px-4 py-2.5 text-[12.5px] text-ink-soft">
+                        {p.cliente_nombre || 'Cliente mostrador'}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono text-[12.5px] font-semibold text-ink tnum">
+                        {Number(p.total).toFixed(2)}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Badge tono={tonoEstado[p.estado]}>{p.estado}</Badge>
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        {p.estado !== 'ANULADO' ? (
                           <button
+                            type="button"
                             onClick={() => setPedidoAAnular(p)}
-                            className="px-2 py-1 rounded-lg bg-rose-950/30 text-rose-400 hover:bg-rose-900/40 border border-rose-800/40 text-[11px] font-semibold transition"
+                            className="h-8 rounded-[7px] border border-danger/30 bg-danger/10 px-2.5 text-[11.5px] font-semibold text-danger transition-colors hover:bg-danger/18"
                           >
                             Anular
                           </button>
+                        ) : (
+                          <span className="text-[11px] text-ink-faint">—</span>
                         )}
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                  ))}
+                </tbody>
+              </table>
 
-        {/* Tabla Kardex */}
-        <div className="bg-[#1a1715] border border-[#2b2520] rounded-2xl overflow-hidden shadow-xl">
-          <div className="p-4 border-b border-[#2b2520] flex justify-between items-center">
-            <h2 className="font-bold text-sm text-white">Movimientos Kardex en Vivo</h2>
-            <span className="text-[11px] text-[#7a6f5f]">Trazabilidad estricta</span>
+              {/* Móvil */}
+              <ul className="divide-y divide-line md:hidden">
+                {pedidos.map((p) => (
+                  <li key={p.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[12.5px] font-bold text-ink tnum">
+                          {p.numero_ficha
+                            ? `#${String(p.numero_ficha).padStart(3, '0')}`
+                            : `#${p.id}`}
+                        </span>
+                        <Badge tono={tonoEstado[p.estado]}>{p.estado}</Badge>
+                      </div>
+                      <p className="mt-0.5 truncate text-[12px] text-ink-muted">
+                        {p.cliente_nombre || 'Cliente mostrador'} · {hora(p.created_at)}
+                      </p>
+                    </div>
+                    <span className="shrink-0 font-mono text-[13px] font-bold text-ink tnum">
+                      {Number(p.total).toFixed(2)}
+                    </span>
+                    {p.estado !== 'ANULADO' && (
+                      <button
+                        type="button"
+                        onClick={() => setPedidoAAnular(p)}
+                        aria-label={`Anular comanda ${p.id}`}
+                        className="flex size-9 shrink-0 items-center justify-center rounded-[8px] border border-danger/30 bg-danger/10 text-danger"
+                      >
+                        <Ban className="size-4" strokeWidth={2.25} />
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
+
+        {/* Kardex */}
+        <section className="overflow-hidden rounded-card border border-line-strong bg-card">
+          <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+            <h2 className="text-[13.5px] font-bold tracking-[-0.01em] text-ink">
+              Movimientos de Kardex
+            </h2>
+            <span className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-faint">
+              trazabilidad
+            </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-[#29231e] text-[#8c806f] uppercase tracking-wider bg-[#141210]">
-                  <th className="py-3 px-4 font-semibold">Producto</th>
-                  <th className="py-3 px-4 font-semibold">Tipo</th>
-                  <th className="py-3 px-4 font-semibold">Cant.</th>
-                  <th className="py-3 px-4 font-semibold">Stock Ant &rarr; Nuevo</th>
-                  <th className="py-3 px-4 font-semibold">Motivo</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#26211c]">
-                {kardex.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-[#6e6355]">
-                      Sin movimientos de Kardex registrados.
-                    </td>
+          {kardex.length === 0 ? (
+            <p className="px-4 py-10 text-center text-[12.5px] text-ink-faint">
+              Sin movimientos de Kardex registrados.
+            </p>
+          ) : (
+            <>
+              {/* Escritorio */}
+              <table className="hidden w-full border-collapse text-left md:table">
+                <caption className="sr-only">Movimientos de inventario con stock anterior y resultante</caption>
+                <thead>
+                  <tr className="border-b border-line bg-sunken text-[10px] uppercase tracking-[0.08em] text-ink-muted">
+                    <th scope="col" className="px-4 py-2.5 font-semibold">Producto</th>
+                    <th scope="col" className="px-4 py-2.5 font-semibold">Tipo</th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-semibold">Cant.</th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-semibold">Stock</th>
+                    <th scope="col" className="px-4 py-2.5 font-semibold">Motivo</th>
                   </tr>
-                ) : (
-                  kardex.map((k) => (
-                    <tr key={k.id} className="hover:bg-[#201d19] transition">
-                      <td className="py-3 px-4 font-medium text-[#ede7dc]">{k.producto_nombre}</td>
-                      <td className="py-3 px-4">
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {kardex.map((k) => (
+                    <tr key={k.id} className="transition-colors hover:bg-raised/60">
+                      <td className="max-w-[160px] truncate px-4 py-2.5 text-[12.5px] font-medium text-ink">
+                        {k.producto_nombre}
+                      </td>
+                      <td className="px-4 py-2.5">
                         <span
-                          className={`inline-flex items-center gap-1 font-semibold text-[10px] ${
-                            k.tipo.includes('ENTRADA') || k.tipo.includes('DEVOLUCION')
-                              ? 'text-emerald-400'
-                              : 'text-amber-400'
+                          className={`inline-flex items-center gap-1 text-[10.5px] font-bold uppercase tracking-[0.05em] ${
+                            esEntrada(k.tipo) ? 'text-ok' : 'text-warn'
                           }`}
                         >
-                          {k.tipo.includes('ENTRADA') || k.tipo.includes('DEVOLUCION') ? (
-                            <ArrowUpRight className="w-3 h-3" />
+                          {esEntrada(k.tipo) ? (
+                            <ArrowUpRight className="size-3" strokeWidth={3} aria-hidden />
                           ) : (
-                            <ArrowDownRight className="w-3 h-3" />
+                            <ArrowDownRight className="size-3" strokeWidth={3} aria-hidden />
                           )}
                           {k.tipo.split('_')[0]}
                         </span>
                       </td>
-                      <td className="py-3 px-4 font-bold text-white num-tabular">{k.cantidad}</td>
-                      <td className="py-3 px-4 text-[#9c907f] num-tabular text-[11px]">
-                        {k.stock_anterior} &rarr;{' '}
-                        <span className="font-bold text-white">{k.stock_resultante}</span>
+                      <td className="px-4 py-2.5 text-right font-mono text-[12px] font-bold text-ink tnum">
+                        {k.cantidad}
                       </td>
-                      <td className="py-3 px-4 text-[#8c806f] text-[11px] truncate max-w-[120px]">
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right font-mono text-[11.5px] text-ink-muted tnum">
+                        {k.stock_anterior} <span aria-hidden>→</span>{' '}
+                        <span className="font-bold text-ink">{k.stock_resultante}</span>
+                      </td>
+                      <td className="max-w-[140px] truncate px-4 py-2.5 text-[11.5px] text-ink-faint">
                         {k.motivo}
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Móvil */}
+              <ul className="divide-y divide-line md:hidden">
+                {kardex.map((k) => (
+                  <li key={k.id} className="px-4 py-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-[12.5px] font-medium text-ink">
+                        {k.producto_nombre}
+                      </span>
+                      <span
+                        className={`flex shrink-0 items-center gap-1 font-mono text-[11px] font-bold ${
+                          esEntrada(k.tipo) ? 'text-ok' : 'text-warn'
+                        }`}
+                      >
+                        {esEntrada(k.tipo) ? (
+                          <ArrowUpRight className="size-3" strokeWidth={3} aria-hidden />
+                        ) : (
+                          <ArrowDownRight className="size-3" strokeWidth={3} aria-hidden />
+                        )}
+                        {k.cantidad}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 truncate text-[11px] text-ink-faint">
+                      {k.tipo.split('_').join(' ').toLowerCase()} · {k.stock_anterior} →{' '}
+                      {k.stock_resultante} · {k.motivo}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
       </div>
 
-      {/* Modal Anular Pedido */}
-      <AnimatePresence>
-        {pedidoAAnular && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.94, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.94, opacity: 0 }}
-              className="bg-[#181614] border border-[#2e2721] rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl"
+      {/* Anular comanda */}
+      <Modal
+        abierto={!!pedidoAAnular}
+        onCerrar={() => setPedidoAAnular(null)}
+        titulo={`Anular comanda #${pedidoAAnular?.id ?? ''}`}
+        descripcion="La acción revierte los pagos y devuelve los productos al inventario."
+        posicion="centro"
+        ancho="md"
+        pie={
+          <div className="flex items-center gap-2">
+            <Button variante="secundaria" onClick={() => setPedidoAAnular(null)}>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              form="form-anular-comanda"
+              variante="peligro"
+              bloque
+              icono={<ShieldAlert className="size-4" strokeWidth={2.25} />}
             >
-              <div className="flex justify-between items-center">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <ShieldAlert className="w-4 h-4 text-rose-400" />
-                  <span>Anular Comanda #{pedidoAAnular.id}</span>
-                </h3>
-                <button onClick={() => setPedidoAAnular(null)} className="text-[#7a6f5f] hover:text-white">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+              Anular y revertir
+            </Button>
+          </div>
+        }
+      >
+        <form id="form-anular-comanda" onSubmit={confirmarAnulacion} className="space-y-4 p-5">
+          <Field etiqueta="Motivo de la anulación" htmlFor="motivo-anulacion-admin">
+            <Textarea
+              id="motivo-anulacion-admin"
+              required
+              rows={3}
+              value={motivoAnulacion}
+              onChange={(e) => setMotivoAnulacion(e.target.value)}
+              placeholder="Ej. error de digitación, el cliente canceló…"
+            />
+          </Field>
 
-              <form onSubmit={confirmarAnulacion} className="space-y-4">
-                <p className="text-xs text-[#9c907f] leading-relaxed">
-                  Esta acción revertirá los pagos en caja y devolverá los productos vendidos al Kardex.
-                </p>
-
-                <div>
-                  <label className="text-xs text-[#ede7dc]">Motivo de la Anulación</label>
-                  <textarea
-                    required
-                    rows={2}
-                    value={motivoAnulacion}
-                    onChange={(e) => setMotivoAnulacion(e.target.value)}
-                    placeholder="Ej. Error de digitación, cliente canceló mesa..."
-                    className="mt-1 w-full px-3 py-2 bg-[#100f0e] border border-[#2e2721] rounded-xl text-xs text-white placeholder-[#6e6355] focus:outline-none focus:border-rose-500"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="stockCheck"
-                    checked={devolverStock}
-                    onChange={(e) => setDevolverStock(e.target.checked)}
-                    className="rounded bg-[#100f0e] border-[#2e2721] text-amber-600 focus:ring-0"
-                  />
-                  <label htmlFor="stockCheck" className="text-xs text-[#ede7dc] select-none">
-                    Devolver automáticamente el stock al inventario
-                  </label>
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-2.5 rounded-xl bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs transition"
-                >
-                  Confirmar Anulación y Reversión
-                </button>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal Ajuste Stock */}
-      <AnimatePresence>
-        {modalAjusteAbierto && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          <label
+            htmlFor="devolver-stock"
+            className="flex cursor-pointer items-start gap-2.5 rounded-field border border-line bg-sunken px-3 py-2.5"
           >
-            <motion.div
-              initial={{ scale: 0.94, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.94, opacity: 0 }}
-              className="bg-[#181614] border border-[#2e2721] rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl"
+            <input
+              id="devolver-stock"
+              type="checkbox"
+              checked={devolverStock}
+              onChange={(e) => setDevolverStock(e.target.checked)}
+              className="mt-0.5 size-4 shrink-0 accent-ember"
+            />
+            <span className="text-[12.5px] leading-5 text-ink-soft">
+              Devolver automáticamente el stock al inventario
+            </span>
+          </label>
+        </form>
+      </Modal>
+
+      {/* Ajuste de inventario */}
+      <Modal
+        abierto={modalAjusteAbierto}
+        onCerrar={() => setModalAjusteAbierto(false)}
+        titulo="Ajuste manual de inventario"
+        descripcion="Todo movimiento queda registrado en el Kardex."
+        posicion="centro"
+        ancho="md"
+        pie={
+          <div className="flex items-center gap-2">
+            <Button variante="secundaria" onClick={() => setModalAjusteAbierto(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" form="form-ajuste-stock" bloque>
+              Registrar en Kardex
+            </Button>
+          </div>
+        }
+      >
+        <form id="form-ajuste-stock" onSubmit={confirmarAjusteInventario} className="space-y-4 p-5">
+          <Field etiqueta="Producto" htmlFor="ajuste-producto">
+            <select
+              id="ajuste-producto"
+              value={productoAjusteId}
+              onChange={(e) => setProductoAjusteId(Number(e.target.value))}
+              className="h-11 w-full rounded-field border border-line-strong bg-sunken px-2.5 text-[13.5px] text-ink transition-colors hover:border-control focus-visible:border-ember focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember/25"
             >
-              <div className="flex justify-between items-center">
-                <h3 className="text-base font-bold text-white">Ajuste Manual de Inventario</h3>
-                <button onClick={() => setModalAjusteAbierto(false)} className="text-[#7a6f5f] hover:text-white">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+              {productosStock.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre} — stock actual {p.stock_actual}
+                </option>
+              ))}
+            </select>
+          </Field>
 
-              <form onSubmit={confirmarAjusteInventario} className="space-y-3.5">
-                <div>
-                  <label className="text-xs text-[#ede7dc]">Producto</label>
-                  <select
-                    value={productoAjusteId}
-                    onChange={(e) => setProductoAjusteId(Number(e.target.value))}
-                    className="mt-1 w-full px-3 py-2 bg-[#100f0e] border border-[#2e2721] rounded-xl text-xs text-white focus:outline-none focus:border-amber-600"
-                  >
-                    {productosStock.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nombre} (Stock actual: {p.stock_actual} uds)
-                      </option>
-                    ))}
-                  </select>
-                </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field etiqueta="Movimiento" htmlFor="ajuste-tipo">
+              <select
+                id="ajuste-tipo"
+                value={tipoAjuste}
+                onChange={(e) => setTipoAjuste(e.target.value as TipoMovimientoInv)}
+                className="h-11 w-full rounded-field border border-line-strong bg-sunken px-2.5 text-[13px] text-ink transition-colors hover:border-control focus-visible:border-ember focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember/25"
+              >
+                <option value="ENTRADA_ABASTECIMIENTO">Entrada (+)</option>
+                <option value="AJUSTE_POSITIVO">Ajuste positivo (+)</option>
+                <option value="AJUSTE_MERMA">Merma / dañado (−)</option>
+              </select>
+            </Field>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-[#ede7dc]">Tipo de Movimiento</label>
-                    <select
-                      value={tipoAjuste}
-                      onChange={(e) => setTipoAjuste(e.target.value as TipoMovimientoInv)}
-                      className="mt-1 w-full px-3 py-2 bg-[#100f0e] border border-[#2e2721] rounded-xl text-xs text-white focus:outline-none focus:border-amber-600"
-                    >
-                      <option value="ENTRADA_ABASTECIMIENTO">Entrada Abastecimiento (+)</option>
-                      <option value="AJUSTE_POSITIVO">Ajuste Positivo (+)</option>
-                      <option value="AJUSTE_MERMA">Ajuste Merma / Dañado (-)</option>
-                    </select>
-                  </div>
+            <Field etiqueta="Cantidad" htmlFor="ajuste-cantidad">
+              <Input
+                id="ajuste-cantidad"
+                type="number"
+                min={1}
+                required
+                value={cantidadAjuste}
+                onChange={(e) => setCantidadAjuste(parseInt(e.target.value) || 1)}
+                className="font-mono tnum"
+              />
+            </Field>
+          </div>
 
-                  <div>
-                    <label className="text-xs text-[#ede7dc]">Cantidad</label>
-                    <input
-                      type="number"
-                      min={1}
-                      required
-                      value={cantidadAjuste}
-                      onChange={(e) => setCantidadAjuste(parseInt(e.target.value) || 1)}
-                      className="mt-1 w-full px-3 py-2 bg-[#100f0e] border border-[#2e2721] rounded-xl text-xs text-white num-tabular focus:outline-none focus:border-amber-600"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs text-[#ede7dc]">Motivo / Comprobante</label>
-                  <input
-                    type="text"
-                    required
-                    value={motivoAjuste}
-                    onChange={(e) => setMotivoAjuste(e.target.value)}
-                    placeholder="Ej. Ingreso de insumos según remisión #45"
-                    className="mt-1 w-full px-3 py-2 bg-[#100f0e] border border-[#2e2721] rounded-xl text-xs text-white placeholder-[#6e6355] focus:outline-none focus:border-amber-600"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs transition"
-                >
-                  Registrar en Kardex
-                </button>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          <Field etiqueta="Motivo o comprobante" htmlFor="ajuste-motivo">
+            <Input
+              id="ajuste-motivo"
+              type="text"
+              required
+              value={motivoAjuste}
+              onChange={(e) => setMotivoAjuste(e.target.value)}
+              placeholder="Ej. ingreso de insumos, remisión #45"
+            />
+          </Field>
+        </form>
+      </Modal>
     </div>
   );
 }

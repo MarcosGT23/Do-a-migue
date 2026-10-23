@@ -1,83 +1,284 @@
 @import "tailwindcss";
 
+/* =============================================================================
+   Doña Migue POS — Sistema de diseño
+   -----------------------------------------------------------------------------
+   El producto es una parrilla boliviana: carbón, brasas y papel de ticket
+   térmico. De ahí salen las dos piezas del sistema:
+
+     · "Carbón"  superficies oscuras cálidas donde vive el catálogo y el chrome.
+     · "Papel"    la comanda se arma sobre un recibo real, en papel claro.
+
+   Reglas de color (WCAG 2.2 AA verificadas con calculadora de contraste):
+     texto ≥ 4.5:1 · texto grande/negrita ≥ 3:1 · bordes de control ≥ 3:1.
+   ============================================================================= */
+
+@theme {
+  /* --- Superficies: carbón de parrilla ---------------------------------- */
+  --color-app: #14110f;        /* fondo de la aplicación                 */
+  --color-chrome: #1c1917;     /* barras, cabeceras, paneles laterales   */
+  --color-card: #24201d;       /* tarjetas, celdas                       */
+  --color-raised: #2e2823;     /* estados hover / superficies elevadas  */
+  --color-sunken: #100e0d;     /* campos de formulario                   */
+
+  /* --- Bordes ------------------------------------------------------------- */
+  --color-line: #332c26;       /* separadores decorativos                */
+  --color-line-strong: #453b33;
+  --color-control: #7d6c5b;    /* borde de control interactivo (3.2:1)   */
+
+  /* --- Tinta sobre carbón ------------------------------------------------ */
+  --color-ink: #f6f1e8;        /* texto principal        (16.7:1)        */
+  --color-ink-soft: #c0b4a3;   /* texto secundario       (8.6:1)         */
+  --color-ink-muted: #9a8d7c;  /* texto terciario        (5.4:1)         */
+  --color-ink-faint: #8a7d6c;  /* placeholder            (4.8:1)         */
+
+  /* --- Acento: brasa ------------------------------------------------------ */
+  --color-ember: #f58348;         /* acento de texto e icono (6.8:1)    */
+  --color-ember-strong: #c2410c;  /* relleno de acción primaria (5.2:1)  */
+  --color-ember-hover: #a8390a;
+
+  /* --- Estados ------------------------------------------------------------ */
+  --color-ok: #5fd08a;          /*  9.1:1 sobre chrome                   */
+  --color-warn: #fbbf24;        /* 10.5:1 sobre chrome                   */
+  --color-danger: #fb7185;      /*  6.5:1 sobre chrome                   */
+  --color-danger-strong: #9f1239;
+
+  /* --- Papel de comanda --------------------------------------------------- */
+  --color-paper: #f7f2e8;
+  --color-paper-2: #efe8da;
+  --color-paper-line: #bfb09a;
+  --color-paper-ink: #1f1a15;        /* 15.5:1 sobre papel                 */
+  --color-paper-ink-soft: #5a5147;   /*  7.0:1 sobre papel                 */
+  --color-stamp: #a32a1e;            /* sello de la ficha  (6.5:1)         */
+  --color-paper-ok: #166534;
+  --color-paper-danger: #b91c1c;
+
+  /* --- Tipografía --------------------------------------------------------- */
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+
+  /* --- Radios ------------------------------------------------------------- */
+  --radius-field: 10px;
+  --radius-card: 14px;
+  --radius-panel: 18px;
+
+  /* --- Sombras ------------------------------------------------------------ */
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 20px -12px rgb(0 0 0 / 0.55);
+  --shadow-pop: 0 2px 6px rgb(0 0 0 / 0.4), 0 24px 60px -24px rgb(0 0 0 / 0.75);
+  --shadow-paper: 0 1px 1px rgb(0 0 0 / 0.3), 0 18px 40px -20px rgb(0 0 0 / 0.8);
+
+  /* --- Movimiento --------------------------------------------------------- */
+  --ease-out-soft: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes velo {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes hoja {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
 @layer base {
-  :root {
-    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-    
-    /* Paleta Inspirada en la Cocina y Brasa Tradicional de Doña Migue */
-    --hearth-base: #100f0e;
-    --hearth-surface: #191715;
-    --hearth-card: #221f1c;
-    --hearth-card-hover: #2c2824;
-    --hearth-border: #332d27;
-    --hearth-border-subtle: #24201c;
-    
-    --ember-primary: #ea580c;
-    --ember-hover: #f97316;
-    --ember-glow: rgba(234, 88, 12, 0.2);
-    
-    --parchment-100: #fbf9f5;
-    --parchment-200: #ede7dc;
-    --parchment-400: #9e9382;
-    --parchment-600: #685f52;
+  html {
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
     font-family: var(--font-sans);
-    background-color: var(--hearth-base);
-    color: var(--parchment-200);
-    letter-spacing: -0.01em;
+    background-color: var(--color-app);
+    color: var(--color-ink);
+    letter-spacing: -0.011em;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Foco visible y consistente: nunca se quita el anillo, sólo se hacePretty. */
+  :where(button, a, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-ember);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-ember) 35%, transparent);
+    color: var(--color-ink);
+  }
+
+  /* Scrollbars discretas, coherentes con la superficie carbón */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #3a332c;
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #4d443a;
+    background-clip: content-box;
+  }
+
+  /* Los números de dinero y fichas van en cifras tabulares */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* El rótulo de las ventanas emergentes debe poder leerse con lector de pantalla */
+  [role="dialog"] {
+    outline: none;
   }
 }
 
-/* Custom Scrollbars */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-::-webkit-scrollbar-track {
-  background: #141210;
-}
-::-webkit-scrollbar-thumb {
-  background: #2f2a24;
-  border-radius: 9999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #473f36;
+@layer components {
+  /* --- Superficie de papel (la comanda) ----------------------------------- */
+  .paper {
+    position: relative;
+    background-color: var(--color-paper);
+    color: var(--color-paper-ink);
+    border-radius: var(--radius-card);
+  }
+
+  /* Filete punteado de recibo */
+  .paper-rule {
+    border-bottom: 1px dashed var(--color-paper-line);
+  }
+
+  /* Sello de la ficha: número de turno en monoespaciada, dentro de un marco */
+  .stamp {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    border: 1px solid color-mix(in srgb, var(--color-stamp) 45%, transparent);
+    color: var(--color-stamp);
+    background-color: color-mix(in srgb, var(--color-stamp) 8%, transparent);
+  }
+
+  /* --- Campos de formulario ------------------------------------------------ */
+  .field {
+    width: 100%;
+    background-color: var(--color-sunken);
+    border: 1px solid var(--color-control);
+    border-radius: var(--radius-field);
+    color: var(--color-ink);
+    font-size: 0.9375rem; /* 15px: por debajo de 13px el texto no es legible */
+    line-height: 1.35;
+    padding: 0.625rem 0.75rem;
+    transition: border-color 120ms var(--ease-out-soft), box-shadow 120ms var(--ease-out-soft);
+  }
+  .field::placeholder {
+    color: var(--color-ink-faint);
+  }
+  .field:hover {
+    border-color: color-mix(in srgb, var(--color-control) 70%, var(--color-ink-soft));
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--color-ember);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-ember) 22%, transparent);
+  }
+  .field:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  .field[aria-invalid="true"] {
+    border-color: var(--color-danger);
+  }
+
+  /* Campo sobre papel */
+  .field-paper {
+    background-color: #fffdf8;
+    border-color: color-mix(in srgb, var(--color-paper-ink) 28%, transparent);
+    color: var(--color-paper-ink);
+  }
+  .field-paper::placeholder {
+    color: color-mix(in srgb, var(--color-paper-ink-soft) 75%, transparent);
+  }
+
+  /* --- Etiquetas ----------------------------------------------------------- */
+  .label {
+    display: block;
+    font-size: 0.8125rem; /* 13px */
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--color-ink-soft);
+  }
+
+  /* --- Superficies --------------------------------------------------------- */
+  .surface {
+    background-color: var(--color-card);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+  }
+
+  /* --- Utilidades ---------------------------------------------------------- */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .safe-b {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
 }
 
-/* Tabular Numbers for POS & Accounting */
-.num-tabular {
-  font-variant-numeric: tabular-nums;
+/* =============================================================================
+   Preferencias del sistema
+   ============================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
-/* Ticket Paper Aesthetic */
-.ticket-paper {
-  background: #1c1916;
-  background-image: radial-gradient(#29241f 1px, transparent 1px);
-  background-size: 16px 16px;
+@media (prefers-contrast: more) {
+  :root {
+    --color-line: #4a4038;
+    --color-control: #9a8975;
+    --color-ink-muted: #b3a695;
+    --color-ink-faint: #a2947f;
+  }
 }
 
-/* Ocultar el portal del ticket térmico en pantalla regular */
+/* =============================================================================
+   🖨️  Impresión térmica (Epson 80mm / 58mm)
+   El portal #ticket-termico-impresion-portal es la única cosa que se imprime;
+   todo lo demás se oculta. Se mantiene blanco sobre negro, sin sombras.
+   ============================================================================= */
 #ticket-termico-impresion-portal {
   display: none !important;
 }
 
-/* 🖨️ Estilos Profesionales para Impresión Térmica de Tickets (ESC/POS 80 x 297 mm) */
 @media print {
   @page {
     size: 80mm 297mm;
     margin: 0mm !important;
   }
 
-  /* Asegurar que los colores y fondos se impriman con fidelidad */
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Ocultar todos los elementos generales de la web al imprimir */
-  html, body {
+  html,
+  body {
     background: #ffffff !important;
     color: #000000 !important;
     margin: 0mm !important;
@@ -88,13 +289,11 @@
     overflow: visible !important;
   }
 
-  /* Ocultar absolutamente todo en el body para que nada ocupe espacio de flujo */
   body > * {
     display: none !important;
     visibility: hidden !important;
   }
 
-  /* Mostrar ÚNICAMENTE el portal montado en la raíz de document.body */
   body > #ticket-termico-impresion-portal {
     display: block !important;
     visibility: visible !important;
@@ -104,11 +303,10 @@
     right: 0mm !important;
     margin: 0 auto !important;
     margin-top: 0mm !important;
-    padding: 0mm 2.5mm 3mm 2.5mm !important; /* CERO ESPACIO SUPERIOR */
-    padding-top: 0mm !important;
+    padding: 0 2.5mm 3mm 2.5mm !important;
     background: #ffffff !important;
     box-sizing: border-box !important;
-    font-family: 'Courier New', Courier, monospace !important;
+    font-family: "Courier New", Courier, monospace !important;
     box-shadow: none !important;
     border: none !important;
     border-radius: 0 !important;
@@ -119,12 +317,11 @@
     visibility: visible !important;
   }
 
-  #ticket-termico-impresion-portal > *:first-child {
+  body > #ticket-termico-impresion-portal > *:first-child {
     margin-top: 0mm !important;
     padding-top: 0mm !important;
   }
 
-  /* Anchos de seguridad para que ningún texto corte en los bordes del papel */
   .ticket-ancho-80mm {
     width: 72mm !important;
     max-width: 72mm !important;
@@ -139,7 +336,6 @@
     line-height: 1.15 !important;
   }
 
-  /* Desactivar fondos y controles no imprimibles */
   .no-print {
     display: none !important;
   }

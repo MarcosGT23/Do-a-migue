@@ -1,8 +1,27 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdminServer } from '../../../core/supabaseAdminServer';
 import { obtenerContextoSesion } from '../../../core/sessionContext';
+import { existeColumnaTipoCorte } from '../../../core/columnaTipoCorte';
+import { existeColumnaNumeroFicha } from '../../../core/columnaNumeroFicha';
 
 export const prerender = false;
+
+const CAMPOS_DETALLE = [
+  'id',
+  'pedido_id',
+  'producto_id',
+  'cantidad',
+  'precio_unitario',
+  'descuento_item',
+  'subtotal',
+  'notas',
+];
+
+const bloqueDetalle = (conCorte: boolean) => `
+        detalle_pedidos (
+          ${CAMPOS_DETALLE.join(',\n          ')}${conCorte ? ',\n          tipo_corte' : ''},
+          productos ( id, nombre, precio_base, categoria_id, imagen_url )
+        ),`;
 
 export const GET: APIRoute = async ({ request, cookies }) => {
   try {
@@ -19,6 +38,9 @@ export const GET: APIRoute = async ({ request, cookies }) => {
     const cajaId = url.searchParams.get('cajaId');
     const estado = url.searchParams.get('estado');
 
+    const conCorte = await existeColumnaTipoCorte();
+    const conFicha = await existeColumnaNumeroFicha();
+
     let query = supabaseAdminServer
       .from('pedidos')
       .select(`
@@ -27,7 +49,7 @@ export const GET: APIRoute = async ({ request, cookies }) => {
         apertura_caja_id,
         usuario_id,
         cliente_nombre,
-        numero_mesa,
+        ${conFicha ? 'numero_ficha,' : ''}
         estado,
         subtotal,
         descuento,
@@ -37,17 +59,7 @@ export const GET: APIRoute = async ({ request, cookies }) => {
         anulado_at,
         created_at,
         updated_at,
-        detalle_pedidos (
-          id,
-          pedido_id,
-          producto_id,
-          cantidad,
-          precio_unitario,
-          descuento_item,
-          subtotal,
-          notas,
-          productos ( id, nombre, precio_base, categoria_id, imagen_url )
-        ),
+        ${bloqueDetalle(conCorte)}
         pagos (
           id,
           pedido_id,
