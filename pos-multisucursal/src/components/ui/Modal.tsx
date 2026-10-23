@@ -48,7 +48,21 @@ export function Modal({
     previo.current = document.activeElement as HTMLElement | null;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    panel.current?.focus();
+
+    // Enfocar el primer campo interactivo del modal (input, select, textarea o button).
+    // Si no hay ninguno, enfocar el panel como fallback.
+    // Esto evita que el usuario tenga que hacer clic dos veces para escribir.
+    const rafId = requestAnimationFrame(() => {
+      if (!panel.current) return;
+      const primer = panel.current.querySelector<HTMLElement>(
+        'input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])'
+      );
+      if (primer) {
+        primer.focus();
+      } else {
+        panel.current.focus();
+      }
+    });
 
     const alPresionar = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -74,6 +88,7 @@ export function Modal({
 
     document.addEventListener('keydown', alPresionar);
     return () => {
+      cancelAnimationFrame(rafId);
       document.removeEventListener('keydown', alPresionar);
       document.body.style.overflow = overflow;
       previo.current?.focus?.();

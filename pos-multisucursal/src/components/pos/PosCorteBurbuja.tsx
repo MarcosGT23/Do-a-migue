@@ -17,7 +17,7 @@ interface Props {
   /** Tarjeta del catálogo desde la que se abrió la burbuja. */
   ancla: HTMLElement | null;
   onCerrar: () => void;
-  onSeleccionar: (cortes: TipoCorte[], cantidad: number) => void;
+  onSeleccionar: (cortes: TipoCorte[], cantidad: number, piezasChuleta?: number) => void;
 }
 
 const ANCHO_BURBUJA = 316;
@@ -134,9 +134,10 @@ export default function PosCorteBurbuja({
     setPiezas((prev) => Math.max(1, Math.min(maxPiezas, prev + delta)));
   };
 
-  // La chuleta se vende por piezas: la cantidad de la línea es la de chuletas.
-  const cantidadFinal = incluyeChuleta ? piezas : 1;
-  const total = precioBase * cantidadFinal;
+  // Al añadir chuleta no se multiplica el precio, se mantiene el precio base del plato.
+  // El contador de piezas solo determina cuántas chuletas van en la porción.
+  const cantidadFinal = 1;
+  const total = precioBase;
 
   const otrosCortes = etiquetasCortes(seleccion.filter((c) => c !== 'CHULETA'));
   const textoChuletas = `${piezas} ${piezas === 1 ? 'chuleta' : 'chuletas'}`;
@@ -174,6 +175,7 @@ export default function PosCorteBurbuja({
       <div className="grid grid-cols-2 gap-2 p-3">
         {OPCIONES_CORTE.map((opt) => {
           const activa = seleccion.includes(opt.id);
+          const ocupaDosColumnas = opt.id === 'CHULETA';
           return (
             <button
               key={opt.id}
@@ -181,6 +183,8 @@ export default function PosCorteBurbuja({
               onClick={() => alternar(opt.id)}
               aria-pressed={activa}
               className={`relative flex min-h-14 flex-col items-start justify-center rounded-[11px] border px-3 py-2 text-left transition-colors ${
+                ocupaDosColumnas ? 'col-span-2' : ''
+              } ${
                 activa
                   ? 'border-ember/60 bg-ember/12'
                   : 'border-line-strong bg-sunken hover:border-control hover:bg-raised'
@@ -262,11 +266,9 @@ export default function PosCorteBurbuja({
             variante="primaria"
             tamano="md"
             bloque
-            onClick={() => onSeleccionar(seleccion, cantidadFinal)}
+            onClick={() => onSeleccionar(seleccion, cantidadFinal, incluyeChuleta ? piezas : undefined)}
           >
-            {incluyeChuleta
-              ? `Añadir ${piezas} ${piezas === 1 ? 'chuleta' : 'chuletas'}`
-              : 'Añadir a la comanda'}
+            Añadir a la comanda
           </Button>
         </div>
       </div>

@@ -10,7 +10,7 @@
  * `detalle_pedidos.tipo_corte` como texto separado por comas: 'COSTILLA,MATAHAMBRE'.
  */
 
-export type TipoCorte = 'COMPLETO' | 'COSTILLA' | 'MATAHAMBRE' | 'CHULETA';
+export type TipoCorte = 'COMPLETO' | 'COSTILLA' | 'MATAHAMBRE' | 'COLITA' | 'CHULETA';
 
 export interface OpcionCorte {
   id: TipoCorte;
@@ -24,6 +24,7 @@ export const OPCIONES_CORTE: OpcionCorte[] = [
   { id: 'COMPLETO', nombre: 'Completo', descripcion: 'Porción completa', porPiezas: false },
   { id: 'COSTILLA', nombre: 'Costilla', descripcion: 'Costilla de res', porPiezas: false },
   { id: 'MATAHAMBRE', nombre: 'Matahambre', descripcion: 'Matahambre de res', porPiezas: false },
+  { id: 'COLITA', nombre: 'Colita', descripcion: 'Colita de res', porPiezas: false },
   { id: 'CHULETA', nombre: 'Chuleta', descripcion: 'Chuletas por pieza', porPiezas: true },
 ];
 
@@ -34,6 +35,7 @@ const ETIQUETAS: Record<TipoCorte, string> = {
   COMPLETO: 'Completo',
   COSTILLA: 'Costilla',
   MATAHAMBRE: 'Matahambre',
+  COLITA: 'Colita',
   CHULETA: 'Chuleta',
 };
 
@@ -147,7 +149,12 @@ export function extraerCortesDeNotas(notas: string | null | undefined): TipoCort
  * Identidad de una línea del carrito: el mismo producto con cortes distintos
  * son líneas distintas.
  */
-export function claveLinea(productoId: number, cortes: TipoCorte[] | null | undefined): string {
+export function claveLinea(
+  productoId: number,
+  cortes: TipoCorte[] | null | undefined,
+  piezasChuleta?: number
+): string {
   const valor = formatearCortes(cortes) ?? 'SIN_CORTE';
-  return `${productoId}:${valor}`;
+  const sufijoChuleta = piezasChuleta && piezasChuleta > 1 ? `:CHULETAS_${piezasChuleta}` : '';
+  return `${productoId}:${valor}${sufijoChuleta}`;
 }

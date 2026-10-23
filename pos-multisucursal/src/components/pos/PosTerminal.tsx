@@ -436,7 +436,9 @@ export default function PosTerminal({
   const agregarAlCarrito = (
     producto: ProductoPOS,
     cortes: TipoCorte[] = [],
-    cantidad: number = 1
+    cantidad: number = 1,
+    notasExtra: string = '',
+    piezasChuleta?: number
   ) => {
     if (producto.stock_actual <= 0) {
       toast.error(`Producto agotado: ${producto.nombre}`);
@@ -446,7 +448,7 @@ export default function PosTerminal({
       toast.warning(`Stock máximo disponible: ${producto.stock_actual} porciones`);
       return;
     }
-    const clave = claveLinea(producto.id, cortes);
+    const clave = claveLinea(producto.id, cortes, piezasChuleta);
     setCarrito((prev) => {
       const existe = prev.find((item) => item.clave === clave);
       if (existe) {
@@ -456,7 +458,7 @@ export default function PosTerminal({
       }
       return [
         ...prev,
-        { ...producto, cantidad, descuento_item: 0, notas: '', tipos_corte: cortes, clave },
+        { ...producto, cantidad, descuento_item: 0, notas: notasExtra, tipos_corte: cortes, clave },
       ];
     });
 
@@ -487,9 +489,10 @@ export default function PosTerminal({
     agregarAlCarrito(producto, [], 1);
   };
 
-  const confirmarCorte = (cortes: TipoCorte[], cantidad: number) => {
+  const confirmarCorte = (cortes: TipoCorte[], cantidad: number, piezasChuleta?: number) => {
     if (!burbujaCorte) return;
-    agregarAlCarrito(burbujaCorte.producto, cortes, cantidad);
+    const notasCorte = piezasChuleta && piezasChuleta > 1 ? `${piezasChuleta} chuletas` : '';
+    agregarAlCarrito(burbujaCorte.producto, cortes, cantidad, notasCorte, piezasChuleta);
     setBurbujaCorte(null);
   };
 

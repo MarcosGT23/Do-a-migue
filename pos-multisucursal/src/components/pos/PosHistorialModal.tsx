@@ -219,12 +219,25 @@ export default function PosHistorialModal({
     }
   }, [abierto, filtroCaja, filtroEstado, sucursalId, cajaActualId]);
 
-  // Al abrir, lleva el foco al panel y lo devuelve al cerrar.
+  // Al abrir, lleva el foco al primer campo interactivo y lo devuelve al cerrar.
   useEffect(() => {
     if (!abierto) return;
     focoPrevio.current = document.activeElement as HTMLElement | null;
-    panelRef.current?.focus();
-    return () => focoPrevio.current?.focus?.();
+    const rafId = requestAnimationFrame(() => {
+      if (!panelRef.current) return;
+      const primer = panelRef.current.querySelector<HTMLElement>(
+        'input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])'
+      );
+      if (primer) {
+        primer.focus();
+      } else {
+        panelRef.current.focus();
+      }
+    });
+    return () => {
+      cancelAnimationFrame(rafId);
+      focoPrevio.current?.focus?.();
+    };
   }, [abierto]);
 
   // Escape cierra el historial (salvo con una ventana encima) y Tab queda dentro.

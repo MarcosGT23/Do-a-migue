@@ -24,7 +24,7 @@ alter table public.detalle_pedidos
   add column if not exists tipo_corte text;
 
 comment on column public.detalle_pedidos.tipo_corte is
-  'Cortes elegidos en el POS, separados por comas: COMPLETO | COSTILLA | MATAHAMBRE | CHULETA';
+  'Cortes elegidos en el POS, separados por comas: COMPLETO | COSTILLA | MATAHAMBRE | COLITA | CHULETA';
 
 -- -----------------------------------------------------------------------------
 -- 2. Solo se admiten los cortes del POS (ahora pueden ser varios)
@@ -36,7 +36,7 @@ alter table public.detalle_pedidos
   add constraint detalle_pedidos_tipo_corte_check
   check (
     tipo_corte is null
-    or tipo_corte ~ '^(COMPLETO|COSTILLA|MATAHAMBRE|CHULETA)(,(COMPLETO|COSTILLA|MATAHAMBRE|CHULETA))*$'
+    or tipo_corte ~ '^(COMPLETO|COSTILLA|MATAHAMBRE|COLITA|CHULETA)(,(COMPLETO|COSTILLA|MATAHAMBRE|COLITA|CHULETA))*$'
   );
 
 -- -----------------------------------------------------------------------------
@@ -58,7 +58,7 @@ begin
     -- Se descartan los valores que no son cortes válidos del POS
     foreach v_parte in array string_to_array(v_lista, ',')
     loop
-      if v_parte in ('COMPLETO', 'COSTILLA', 'MATAHAMBRE', 'CHULETA') then
+      if v_parte in ('COMPLETO', 'COSTILLA', 'MATAHAMBRE', 'COLITA', 'CHULETA') then
         v_cortes := array_append(v_cortes, v_parte);
       end if;
     end loop;
