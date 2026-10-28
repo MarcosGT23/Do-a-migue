@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "npm --prefix pos-multisucursal run dev",
     "build": "npm --prefix pos-multisucursal run build",
-    "preview": "npm --prefix pos-multisucursal run preview"
+    "preview": "npm --prefix pos-multisucursal run preview",
+    "deploy": "vercel deploy --prod --yes",
+    "deploy:preview": "vercel deploy --yes"
   }
 }
