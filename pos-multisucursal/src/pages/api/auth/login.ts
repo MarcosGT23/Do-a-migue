@@ -1,13 +1,9 @@
 import type { APIRoute } from 'astro';
 import { createClient } from '@supabase/supabase-js';
+import { supabaseAnonKey, supabaseUrl } from '../../../core/supabaseConfig';
 import { supabaseAdminServer } from '../../../core/supabaseAdminServer';
 
 export const prerender = false;
-
-const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL || 'https://chtfqkriruyxvjxmmazl.supabase.co';
-const supabaseAnonKey =
-  import.meta.env.PUBLIC_SUPABASE_ANON_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNodGZxa3JpcnV5eHZqeG1tYXpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzNzk1ODMsImV4cCI6MjA4Njk1NTU4M30.ql4JMrg9OcJ6DKNpFu3Q2ncw30NMT3ebAWVNT0dhQ18';
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   try {
@@ -22,7 +18,6 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       );
     }
 
-    // 1. Normalizar y resolver alias de correo
     let cleanEmail = rawEmail.trim().toLowerCase();
     if (['admin', 'hernan', 'administrador'].includes(cleanEmail)) {
       cleanEmail = 'hernan@donamigue.com';
@@ -32,7 +27,6 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       cleanEmail = 'cajero@donamigue.com';
     }
 
-    // 2. Cliente de autenticación aislado para validar credenciales sin tocar los headers de supabaseAdminServer
     const authClient = createClient(supabaseUrl, supabaseAnonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
@@ -62,8 +56,6 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     }
 
     const userId = authData.user.id;
-
-    // 3. Consultar perfil en tabla public.usuarios usando supabaseAdminServer (con service_role key intacta)
     const { data: perfil } = await supabaseAdminServer
       .from('usuarios')
       .select('id, nombre_completo, rol, sucursal_id, activo')
@@ -77,12 +69,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       );
     }
 
-    // 4. Determinar rol estricto desde la base de datos
     const rol = ((perfil?.rol || 'CAJERO') as string).toUpperCase();
     const esAdmin = rol === 'ADMIN' || rol === 'SUPERVISOR';
     const sucursalId = perfil?.sucursal_id || 1;
 
-    // 5. Consultar nombre de la sucursal
     const { data: sucursal } = await supabaseAdminServer
       .from('sucursales')
       .select('nombre')
@@ -102,10 +92,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       autenticado: true,
     };
 
-    // 6. Guardar cookies compatibles con Astro SSR
     cookies.set('dona_migue_user', encodeURIComponent(JSON.stringify(sesionData)), {
       path: '/',
-      maxAge: 60 * 60 * 24 * 7, // 7 días
+      maxAge: 60 * 60 * 24 * 7,
       sameSite: 'lax',
       httpOnly: false,
     });

@@ -60,6 +60,7 @@ export interface PedidoHistorial {
   cliente_nombre: string;
   /** Ficha del turno (se reinicia en cada caja abierta). */
   numero_ficha?: number | null;
+  tipo_servicio?: 'mesa' | 'llevar' | null;
   estado: 'PAGADO' | 'PENDIENTE' | 'ANULADO';
   subtotal: number;
   descuento: number;
@@ -165,6 +166,7 @@ export default function PosHistorialModal({
       cajeroNombre: pedidoParaTicket.usuarios?.nombre_completo || 'Cajero',
       clienteNombre: pedidoParaTicket.cliente_nombre,
       numeroFicha: pedidoParaTicket.numero_ficha,
+      tipoServicio: pedidoParaTicket.tipo_servicio,
       fecha: pedidoParaTicket.created_at,
       items: (pedidoParaTicket.detalle_pedidos || []).map((det) => ({
         nombre: det.productos?.nombre || `Item #${det.producto_id}`,

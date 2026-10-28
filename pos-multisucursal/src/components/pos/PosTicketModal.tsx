@@ -25,6 +25,7 @@ export interface TicketData {
   clienteNombre: string;
   /** Ficha del turno (se reinicia en cada caja abierta). */
   numeroFicha?: number | null;
+  tipoServicio?: 'mesa' | 'llevar' | null;
   fecha: Date | string;
   items: TicketItem[];
   subtotal: number;
@@ -58,29 +59,31 @@ function ContenidoTicket({
 }) {
   return (
     <div className="text-[11px] leading-tight text-black">
-      <div className="pb-2 text-center">
-        <p className="text-[15px] font-black uppercase leading-none tracking-[0.08em]">Doña Migue</p>
-        <p className="mt-1 text-[9.5px] font-bold uppercase tracking-[0.06em]">
-          {ticket.sucursalNombre}
-        </p>
-      </div>
-
-      <div className="flex justify-center pb-2">
-        <div className="border-[1.5px] border-black px-2 py-0.5 text-center">
-          <p className="text-[8.5px] font-bold uppercase tracking-[0.18em]">
-            {ticket.numeroFicha ? 'Ficha' : 'Comanda'}
-          </p>
-          <p className="font-mono text-[20px] font-black leading-none tracking-tight">
-            {ticket.numeroFicha ? `#${String(ticket.numeroFicha).padStart(3, '0')}` : `#${pedidoIdStr}`}
-          </p>
+      <div className="pb-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[13px] font-black uppercase leading-none tracking-[0.08em]">Doña Migue</p>
+            <p className="mt-0.5 break-words text-[9px] font-bold uppercase tracking-[0.06em]">
+              {ticket.sucursalNombre}
+            </p>
+          </div>
+          <div className="shrink-0 border-[1.5px] border-black px-3 py-1 text-center">
+            <p className="text-[8.5px] font-bold uppercase tracking-[0.18em]">Ficha</p>
+            <p className="font-mono text-[25px] font-black leading-none tracking-tight">
+              {ticket.numeroFicha ? `#${String(ticket.numeroFicha).padStart(3, '0')}` : `#${pedidoIdStr}`}
+            </p>
+          </div>
+        </div>
+        <div className="mt-1.5 flex justify-end">
+          <div className="border-[1.5px] border-black px-2.5 py-0.5 text-center">
+            <p className="text-[10px] font-black uppercase leading-tight">
+              {ticket.tipoServicio === 'llevar' ? 'Llevar' : 'Mesa'}
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="border-y border-dashed border-black py-1.5">
-        <p className="flex justify-between gap-2">
-          <span className="font-bold">Comanda</span>
-          <span className="font-mono font-black">#{pedidoIdStr}</span>
-        </p>
+      <div className="border-y border-dashed border-black py-1">
         <p className="flex justify-between gap-2">
           <span className="font-bold">Cliente</span>
           <span className="max-w-[62%] break-words text-right font-black uppercase">
@@ -103,30 +106,30 @@ function ContenidoTicket({
         )}
       </div>
 
-      <div className="space-y-1.5 border-b border-dashed border-black py-2">
+      <div className="space-y-2 border-b border-dashed border-black py-2.5">
         {(ticket.items || []).map((det, idx) => {
           const notaLimpia = limpiarNotas(det.notas);
           return (
             <div key={idx}>
               <div className="flex items-start justify-between gap-2">
-                <span className="min-w-0 flex-1 break-words font-bold">
+                <span className="min-w-0 flex-1 break-words text-[13px] font-bold leading-snug">
                   <span className="font-black">{det.cantidad}x</span> {det.nombre}
                 </span>
-                <span className="shrink-0 font-mono font-black tabular-nums">
+                <span className="shrink-0 font-mono text-[13px] font-black tabular-nums">
                   {Number(det.subtotal).toFixed(2)}
                 </span>
               </div>
               {det.tipo_corte && det.tipo_corte.length > 0 && (
-                <p className="pl-2.5 text-[9.5px] font-black uppercase leading-tight">
+                <p className="pl-3 text-[11px] font-black uppercase leading-tight">
                   {det.tipo_corte.length > 1 ? 'Cortes' : 'Corte'}:{' '}
                   {etiquetasCortes(det.tipo_corte)}
                 </p>
               )}
               {notaLimpia && (
-                <p className="pl-2.5 text-[9.5px] italic leading-tight">» {notaLimpia}</p>
+                <p className="pl-3 text-[11px] italic leading-tight">» {notaLimpia}</p>
               )}
               {det.descuento_item && det.descuento_item > 0 ? (
-                <p className="pl-2.5 font-mono text-[9.5px] font-bold leading-tight">
+                <p className="pl-3 font-mono text-[11px] font-bold leading-tight">
                   Desc. -{Number(det.descuento_item).toFixed(2)}
                 </p>
               ) : null}
@@ -302,30 +305,30 @@ export default function PosTicketModal({
             aria-label="Comprobante de venta"
             className="relative w-full max-w-sm space-y-3.5 rounded-panel border border-line-strong bg-chrome p-4 text-ink shadow-pop"
           >
-            <div className="flex items-start justify-between gap-2 border-b border-line pb-3">
-              <div className="flex min-w-0 items-center gap-2.5">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-[9px] border border-ember/30 bg-ember/10 text-ember">
-                  <Receipt className="size-4" strokeWidth={2.25} />
+            <div className="flex items-center justify-between gap-2 border-b border-line pb-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-[7px] border border-ember/30 bg-ember/10 text-ember">
+                  <Receipt className="size-3.5" strokeWidth={2.25} />
                 </span>
                 <div className="min-w-0">
-                  <h3 className="text-[13.5px] font-bold leading-tight text-ink">Comprobante</h3>
-                  <p className="truncate text-[11px] text-ink-muted">
+                  <h3 className="text-[12px] font-bold leading-tight text-ink">Comprobante</h3>
+                  <p className="truncate text-[10px] text-ink-muted">
                     {ticket.numeroFicha
-                      ? `Ficha #${ticket.numeroFicha} · Comanda #${pedidoIdStr}`
+                      ? `Ficha #${ticket.numeroFicha} · #${pedidoIdStr}`
                       : `Comanda #${pedidoIdStr}`}
                   </p>
                 </div>
               </div>
 
               <div className="flex shrink-0 items-center gap-1">
-                <div className="flex items-center gap-0.5 rounded-[8px] border border-line bg-sunken p-0.5">
+                <div className="flex items-center gap-0.5 rounded-[7px] border border-line bg-sunken p-0.5">
                   {(['80mm', '58mm'] as const).map((ancho) => (
                     <button
                       key={ancho}
                       type="button"
                       onClick={() => cambiarAnchoPapel(ancho)}
                       aria-pressed={anchoPapel === ancho}
-                      className={`rounded-[6px] px-1.5 py-1 font-mono text-[10px] font-bold transition-colors ${
+                      className={`rounded-[5px] px-1.5 py-0.5 font-mono text-[9.5px] font-bold transition-colors ${
                         anchoPapel === ancho
                           ? 'bg-ember-strong text-white'
                           : 'text-ink-muted hover:text-ink'
@@ -339,7 +342,7 @@ export default function PosTicketModal({
                   etiqueta="Cerrar (Esc)"
                   onClick={onClose}
                   tamano="sm"
-                  icono={<X className="size-4" strokeWidth={2.25} />}
+                  icono={<X className="size-3.5" strokeWidth={2.25} />}
                 />
               </div>
             </div>

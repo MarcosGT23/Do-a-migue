@@ -86,7 +86,10 @@ export const PosService = {
         if (!res.ok || !data.ok) {
             throw new Error(data.error || 'No se pudo abrir la caja.');
         }
-        return data.caja;
+        return {
+            caja: data.caja,
+            yaAbierta: Boolean(data.yaAbierta),
+        };
     },
 
     async obtenerEstadoCaja(sucursalId: number) {
@@ -102,30 +105,30 @@ export const PosService = {
         apertura_caja_id: number;
         usuario_id: string;
         cliente_nombre: string;
-        descuento_global: number;
         items: ItemCarritoDTO[];
+        tipo_servicio?: 'mesa' | 'llevar';
+        onPedidoCreado?: (pedidoId: number) => void;
     }) {
-        const { data, error } = await supabase.rpc('crear_pedido_pos', {
-            p_apertura_caja_id: params.apertura_caja_id,
-            p_usuario_id: params.usuario_id,
-            p_cliente_nombre: params.cliente_nombre,
-            // La RPC exige el parámetro, pero el POS ya no usa el número de mesa:
-            // la ficha del turno la asigna la base de datos.
-            p_numero_mesa: null,
-            // La RPC inserta la cabecera antes del detalle (subtotal 0), así que
-            // un descuento aquí rompe "chk_descuento_valido". Se aplica después.
-            p_descuento_global: 0,
-            p_items: params.items,
+        const response = await fetch('/api/pedidos/crear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                apertura_caja_id: params.apertura_caja_id,
+                cliente_nombre: params.cliente_nombre,
+                items: params.items,
+                tipo_servicio: params.tipo_servicio || 'mesa',
+            }),
         });
-        if (error) throw new Error(error.message);
+        const result = await response.json();
+        const pedidoId = Number(result.pedido_id);
 
-        const pedidoId = data as number;
-        if (params.descuento_global > 0) {
-            await this.aplicarDescuentoPedido({
-                pedido_id: pedidoId,
-                descuento: params.descuento_global,
-            });
+        if (!response.ok || !result.ok || !Number.isSafeInteger(pedidoId) || pedidoId <= 0) {
+            if (Number.isSafeInteger(pedidoId) && pedidoId > 0) {
+                params.onPedidoCreado?.(pedidoId);
+            }
+            throw new Error(result.error || 'No se pudo crear el pedido.');
         }
+        params.onPedidoCreado?.(pedidoId);
         return pedidoId;
     },
 
@@ -159,17 +162,24 @@ export const PosService = {
         metodo: MetodoPago;
         monto: number;
         referencia_pago?: string;
+        descuento?: number;
     }) {
-        const { data, error } = await supabase.rpc('registrar_pago_pos', {
-            p_pedido_id: params.pedido_id,
-            p_apertura_caja_id: params.apertura_caja_id,
-            p_usuario_id: params.usuario_id,
-            p_metodo: params.metodo,
-            p_monto: params.monto,
-            p_referencia_pago: params.referencia_pago || null,
+        const response = await fetch('/api/pedidos/pago', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                pedido_id: params.pedido_id,
+                apertura_caja_id: params.apertura_caja_id,
+                metodo: params.metodo,
+                descuento: params.descuento || 0,
+                referencia_pago: params.referencia_pago || null,
+            }),
         });
-        if (error) throw new Error(error.message);
-        return data;
+        const result = await response.json();
+        if (!response.ok || !result.ok) {
+            throw new Error(result.error || 'No se pudo registrar el pago.');
+        }
+        return result.resultado;
     },
 
     async listarPedidos(params?: { sucursalId?: number; cajaId?: number; estado?: string }) {
@@ -249,16 +259,21 @@ export const PosService = {
         cantidad: number;
         motivo: string;
     }) {
-        const { data, error } = await supabase.rpc('ajustar_inventario_pos', {
-            p_sucursal_id: params.sucursal_id,
-            p_producto_id: params.producto_id,
-            p_usuario_id: params.usuario_id,
-            p_tipo: params.tipo,
-            p_cantidad: params.cantidad,
-            p_motivo: params.motivo,
+        const response = await fetch('/api/inventario/ajustar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                producto_id: params.producto_id,
+                tipo: params.tipo,
+                cantidad: params.cantidad,
+                motivo: params.motivo,
+            }),
         });
-        if (error) throw new Error(error.message);
-        return data;
+        const result = await response.json();
+        if (!response.ok || !result.ok) {
+            throw new Error(result.error || 'No se pudo registrar el ajuste de inventario.');
+        }
+        return result.resultado;
     },
 
     // ==========================================================================

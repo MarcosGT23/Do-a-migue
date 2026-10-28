@@ -40,6 +40,11 @@ export const GET: APIRoute = async ({ request, cookies }) => {
 
     const conCorte = await existeColumnaTipoCorte();
     const conFicha = await existeColumnaNumeroFicha();
+    const { error: tipoServicioError } = await supabaseAdminServer
+      .from('pedidos')
+      .select('tipo_servicio')
+      .limit(1);
+    const conTipoServicio = !tipoServicioError;
 
     let query = supabaseAdminServer
       .from('pedidos')
@@ -50,6 +55,7 @@ export const GET: APIRoute = async ({ request, cookies }) => {
         usuario_id,
         cliente_nombre,
         ${conFicha ? 'numero_ficha,' : ''}
+        ${conTipoServicio ? 'tipo_servicio,' : ''}
         estado,
         subtotal,
         descuento,

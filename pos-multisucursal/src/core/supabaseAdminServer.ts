@@ -1,26 +1,27 @@
 import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl =
-  (typeof import.meta !== 'undefined' && import.meta.env?.PUBLIC_SUPABASE_URL) ||
-  (typeof process !== 'undefined' && process.env?.PUBLIC_SUPABASE_URL) ||
-  'https://chtfqkriruyxvjxmmazl.supabase.co';
+import { supabaseUrl } from './supabaseConfig';
 
 const getServiceRoleKey = (): string => {
-  if (typeof import.meta !== 'undefined' && import.meta.env) {
-    if (import.meta.env.PUBLIC_SUPABASE_SERVICE_ROLE_KEY) return import.meta.env.PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
-    if (import.meta.env.SUPABASE_SERVICE_ROLE_KEY) return import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
+  const env = typeof import.meta !== 'undefined' ? import.meta.env : undefined;
+  const key =
+    env?.SUPABASE_SECRET_KEY ||
+    env?.SUPABASE_SERVICE_ROLE_KEY ||
+    (typeof process !== 'undefined'
+      ? process.env?.SUPABASE_SECRET_KEY || process.env?.SUPABASE_SERVICE_ROLE_KEY
+      : undefined);
+
+  if (!key || key === '******') {
+    throw new Error('Falta configurar SUPABASE_SECRET_KEY o SUPABASE_SERVICE_ROLE_KEY en el servidor.');
   }
-  if (typeof process !== 'undefined' && process?.env?.SUPABASE_SERVICE_ROLE_KEY) {
-    return process.env.SUPABASE_SERVICE_ROLE_KEY;
-  }
-  return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNodGZxa3JpcnV5eHZqeG1tYXpsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTM3OTU4MywiZXhwIjoyMDg2OTU1NTgzfQ.NScTGLzAYPgWz93t4xKKXK3Gr4NlBwHZ3-OYQIfGRNs';
+
+  return key;
 };
 
 const serviceRoleKey = getServiceRoleKey();
 
 /**
  * Cliente EXCLUSIVO de servidor (Astro SSR y endpoints de /api).
- * Utiliza la Service Role Key para eludir RLS en consultas administrativas.
+ * Utiliza la clave secreta para eludir RLS en consultas administrativas.
  * NUNCA importar en componentes React cliente.
  */
 export const supabaseAdminServer = createClient(supabaseUrl, serviceRoleKey, {
@@ -31,4 +32,3 @@ export const supabaseAdminServer = createClient(supabaseUrl, serviceRoleKey, {
 });
 
 export const supabaseSSR = supabaseAdminServer;
-

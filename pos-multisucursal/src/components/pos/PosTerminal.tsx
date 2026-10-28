@@ -22,6 +22,8 @@ import {
   Search,
   ChevronRight,
   ChevronDown,
+  UtensilsCrossed,
+  ShoppingBag,
 } from 'lucide-react';
 import { PosService, type MetodoPago } from '../../services/pos.service';
 import PosHeader from './PosHeader';
@@ -58,6 +60,21 @@ interface CartItem extends ProductoPOS {
   tipos_corte: TipoCorte[];
   /** Identidad de la línea: producto + cortes. */
   clave: string;
+}
+
+interface PedidoPendientePago {
+  id: number;
+  aperturaCajaId: number;
+  clienteNombre: string;
+  tipoServicio: 'mesa' | 'llevar';
+  carrito: CartItem[];
+  subtotal: number;
+  descuento: number;
+  total: number;
+  metodo: MetodoPago;
+  efectivoRecibido: number;
+  cambio: number;
+  referenciaPago: string;
 }
 
 interface Props {
@@ -104,13 +121,22 @@ export default function PosTerminal({
   const [busqueda, setBusqueda] = useState('');
 
   const [carrito, setCarrito] = useState<CartItem[]>([]);
+  const carritoRef = React.useRef(carrito);
+  const actualizarCarrito = (actualizar: React.SetStateAction<CartItem[]>) => {
+    const siguiente =
+      typeof actualizar === 'function' ? actualizar(carritoRef.current) : actualizar;
+    carritoRef.current = siguiente;
+    setCarrito(siguiente);
+  };
   const [burbujaCorte, setBurbujaCorte] = useState<{
     producto: ProductoPOS;
     ancla: HTMLElement;
   } | null>(null);
   const [clienteNombre, setClienteNombre] = useState('');
+  const [tipoServicio, setTipoServicio] = useState<'mesa' | 'llevar'>('mesa');
   /** Ficha que le tocará a la próxima comanda del turno. */
   const [proximaFicha, setProximaFicha] = useState<number | null>(null);
+  const solicitudFichaRef = React.useRef(0);
   const [descuentoGlobal, setDescuentoGlobal] = useState<number>(0);
 
   const [comandaAbierta, setComandaAbierta] = useState(false);
@@ -120,6 +146,9 @@ export default function PosTerminal({
   const [modalTicketAbierto, setModalTicketAbierto] = useState(false);
   const [ticketParaImprimir, setTicketParaImprimir] = useState<TicketData | null>(null);
   const [procesando, setProcesando] = useState(false);
+  const procesandoRef = React.useRef(false);
+  const [pagoPendiente, setPagoPendiente] = useState(false);
+  const pedidoPendienteRef = React.useRef<PedidoPendientePago | null>(null);
 
   const [metodoSeleccionado, setMetodoSeleccionado] = useState<MetodoPago>('EFECTIVO');
   const [referenciaPago, setReferenciaPago] = useState('');
@@ -149,6 +178,7 @@ export default function PosTerminal({
   // Ficha que le tocará a la próxima comanda (la base de datos la asigna al
   // crear el pedido y se reinicia en cada caja abierta).
   const cargarProximaFicha = React.useCallback(async (caja: number | null) => {
+    const solicitud = ++solicitudFichaRef.current;
     if (!caja) {
       setProximaFicha(null);
       return;
@@ -156,13 +186,14 @@ export default function PosTerminal({
     try {
       const res = await fetch(`/api/pedidos/ficha?aperturaCajaId=${caja}`);
       const data = await res.json();
+      if (solicitud !== solicitudFichaRef.current) return;
       if (res.ok && data.ok && data.proxima_ficha) {
         setProximaFicha(Number(data.proxima_ficha));
       } else {
         setProximaFicha(null);
       }
     } catch {
-      setProximaFicha(null);
+      if (solicitud === solicitudFichaRef.current) setProximaFicha(null);
     }
   }, []);
 
@@ -222,16 +253,20 @@ export default function PosTerminal({
     setAbriendoCaja(true);
 
     try {
-      const nuevaCaja = await PosService.abrirCaja({
+      const resultadoApertura = await PosService.abrirCaja({
         sucursal_id: sucursalId,
         usuario_id: usuarioId,
         monto_inicial: parseFloat(montoApertura) || 0,
       });
+      const nuevaCaja = resultadoApertura.caja;
 
+      setProximaFicha(null);
       setCajaId(nuevaCaja.id);
       setCajaInfo(nuevaCaja);
       toast.success(`Caja #${nuevaCaja.id} habilitada con éxito`, {
-        description: `Fondo de ${bolivianos(Number(nuevaCaja.monto_inicial))}. Ya puedes registrar ventas.`,
+        description: resultadoApertura.yaAbierta
+          ? `Fondo de ${bolivianos(Number(nuevaCaja.monto_inicial))}. Ya puedes registrar ventas.`
+          : `Fondo de ${bolivianos(Number(nuevaCaja.monto_inicial))}. La ficha inicia en 001.`,
         duration: 3500,
       });
     } catch (err: any) {
@@ -444,23 +479,23 @@ export default function PosTerminal({
       toast.error(`Producto agotado: ${producto.nombre}`);
       return;
     }
-    if (totalEnCarrito(producto.id) + cantidad > producto.stock_actual) {
+    const carritoActual = carritoRef.current;
+    if (totalEnCarrito(producto.id, carritoActual) + cantidad > producto.stock_actual) {
       toast.warning(`Stock máximo disponible: ${producto.stock_actual} porciones`);
       return;
     }
     const clave = claveLinea(producto.id, cortes, piezasChuleta);
-    setCarrito((prev) => {
-      const existe = prev.find((item) => item.clave === clave);
-      if (existe) {
-        return prev.map((item) =>
-          item.clave === clave ? { ...item, cantidad: item.cantidad + cantidad } : item
-        );
-      }
-      return [
-        ...prev,
-        { ...producto, cantidad, descuento_item: 0, notas: notasExtra, tipos_corte: cortes, clave },
-      ];
-    });
+    const existe = carritoActual.find((item) => item.clave === clave);
+    actualizarCarrito(
+      existe
+        ? carritoActual.map((item) =>
+            item.clave === clave ? { ...item, cantidad: item.cantidad + cantidad } : item
+          )
+        : [
+            ...carritoActual,
+            { ...producto, cantidad, descuento_item: 0, notas: notasExtra, tipos_corte: cortes, clave },
+          ]
+    );
 
     // Sin panel lateral (pantallas < lg) conviene confirmar que el plato entró.
     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
@@ -497,7 +532,7 @@ export default function PosTerminal({
   };
 
   const cambiarCantidad = (clave: string, delta: number) => {
-    setCarrito((prev) =>
+    actualizarCarrito((prev) =>
       prev
         .map((item) => {
           if (item.clave !== clave) return item;
@@ -524,50 +559,97 @@ export default function PosTerminal({
   };
 
   const eliminarLinea = (clave: string) => {
-    setCarrito((prev) => prev.filter((item) => item.clave !== clave));
+    actualizarCarrito((prev) => prev.filter((item) => item.clave !== clave));
   };
 
   const vaciarComanda = () => {
-    setCarrito([]);
+    actualizarCarrito([]);
     setDescuentoGlobal(0);
+    setTipoServicio('mesa');
   };
 
   const confirmarPedidoYPago = async () => {
-    if (carrito.length === 0 || !cajaId) return;
+    const pendiente = pedidoPendienteRef.current;
+    if (
+      (!pendiente && (carrito.length === 0 || !cajaId)) ||
+      procesandoRef.current
+    ) return;
+    const montoRecibido = Number(efectivoRecibido);
+    if (
+      !pendiente &&
+      metodoSeleccionado === 'EFECTIVO' &&
+      (!Number.isFinite(montoRecibido) || montoRecibido < totalPagar)
+    ) {
+      toast.error(`El efectivo recibido debe ser al menos ${bolivianos(totalPagar)}`);
+      return;
+    }
+
+    const snapshotCarrito = pendiente?.carrito ?? [...carrito];
+    const snapshotSubtotal = pendiente?.subtotal ?? subtotalCarrito;
+    const snapshotDescuento = pendiente?.descuento ?? descuentoGlobal;
+    const snapshotTotal = pendiente?.total ?? totalPagar;
+    const snapshotCliente = pendiente?.clienteNombre ?? (clienteNombre.trim() || 'Cliente Mostrador');
+    const snapshotMetodo = pendiente?.metodo ?? metodoSeleccionado;
+    const snapshotEfectivo =
+      pendiente?.efectivoRecibido ?? (snapshotMetodo === 'EFECTIVO' ? montoRecibido : totalPagar);
+    const snapshotCambio = pendiente?.cambio ?? cambioEfectivo;
+    const snapshotTipoServicio = pendiente?.tipoServicio ?? tipoServicio;
+    const snapshotReferencia = pendiente?.referenciaPago ?? referenciaPago;
+    const snapshotCajaId = pendiente?.aperturaCajaId ?? cajaId;
+
+    if (!snapshotCajaId) {
+      toast.error('No hay una caja abierta para registrar el pago.');
+      return;
+    }
+
+    procesandoRef.current = true;
     setProcesando(true);
 
-    // Preparar datos del ticket antes de limpiar el carrito
-    const snapshotCarrito = [...carrito];
-    const snapshotSubtotal = subtotalCarrito;
-    const snapshotDescuento = descuentoGlobal;
-    const snapshotTotal = totalPagar;
-    const snapshotCliente = clienteNombre.trim() || 'Cliente Mostrador';
-    const snapshotMetodo = metodoSeleccionado;
-    const snapshotEfectivo = parseFloat(efectivoRecibido) || totalPagar;
-    const snapshotCambio = cambioEfectivo;
-
     const promesaTransaccion = async () => {
-      const pedidoId = await PosService.crearPedido({
-        apertura_caja_id: cajaId,
-        usuario_id: usuarioId,
-        cliente_nombre: snapshotCliente,
-        descuento_global: snapshotDescuento,
-        items: snapshotCarrito.map((i) => ({
-          producto_id: i.id,
-          cantidad: i.cantidad,
-          descuento_item: i.descuento_item,
-          notas: construirNotasConCorte(i.notas, i.tipos_corte),
-        })),
-      });
+      let pedidoId = pedidoPendienteRef.current?.id;
+      if (!pedidoId) {
+        pedidoId = await PosService.crearPedido({
+          apertura_caja_id: snapshotCajaId,
+          usuario_id: usuarioId,
+          cliente_nombre: snapshotCliente,
+          items: snapshotCarrito.map((i) => ({
+            producto_id: i.id,
+            cantidad: i.cantidad,
+            descuento_item: i.descuento_item,
+            notas: construirNotasConCorte(i.notas, i.tipos_corte),
+          })),
+          tipo_servicio: snapshotTipoServicio,
+          onPedidoCreado: (id) => {
+            pedidoPendienteRef.current = {
+              id,
+              aperturaCajaId: snapshotCajaId,
+              clienteNombre: snapshotCliente,
+              tipoServicio: snapshotTipoServicio,
+              carrito: snapshotCarrito,
+              subtotal: snapshotSubtotal,
+              descuento: snapshotDescuento,
+              total: snapshotTotal,
+              metodo: snapshotMetodo,
+              efectivoRecibido: snapshotEfectivo,
+              cambio: snapshotCambio,
+              referenciaPago: snapshotReferencia,
+            };
+            setPagoPendiente(true);
+          },
+        });
+      }
 
       await PosService.registrarPago({
         pedido_id: pedidoId,
-        apertura_caja_id: cajaId,
+        apertura_caja_id: snapshotCajaId,
         usuario_id: usuarioId,
         metodo: snapshotMetodo,
         monto: snapshotTotal,
-        referencia_pago: referenciaPago,
+        referencia_pago: snapshotReferencia,
+        descuento: snapshotDescuento,
       });
+      pedidoPendienteRef.current = null;
+      setPagoPendiente(false);
 
       // Ficha asignada por la base de datos (consecutivo del turno)
       let ficha: number | null = null;
@@ -576,7 +658,7 @@ export default function PosTerminal({
       } catch {
         ficha = null;
       }
-      cargarProximaFicha(cajaId);
+      cargarProximaFicha(snapshotCajaId);
 
       setProductos((prev) =>
         prev.map((prod) => {
@@ -592,11 +674,12 @@ export default function PosTerminal({
       // Armar el comprobante térmico con el ID emitido
       const datosTicket: TicketData = {
         pedidoId,
-        aperturaCajaId: cajaId,
+        aperturaCajaId: snapshotCajaId,
         sucursalNombre,
         cajeroNombre,
         clienteNombre: snapshotCliente,
         numeroFicha: ficha,
+        tipoServicio: snapshotTipoServicio,
         fecha: new Date(),
         items: snapshotCarrito.map((i) => ({
           nombre: i.nombre,
@@ -618,9 +701,10 @@ export default function PosTerminal({
       setTicketParaImprimir(datosTicket);
       setModalTicketAbierto(true);
 
-      setCarrito([]);
+      actualizarCarrito([]);
       setClienteNombre('');
       setDescuentoGlobal(0);
+      setTipoServicio('mesa');
       setReferenciaPago('');
       setEfectivoRecibido('');
       setModalPagoAbierto(false);
@@ -635,7 +719,10 @@ export default function PosTerminal({
           ? `Ficha #${r.ficha} emitida. Imprimiendo ticket…`
           : `Comanda #${r?.id} emitida. Imprimiendo ticket…`,
       error: (err) => err.message,
-      finally: () => setProcesando(false),
+      finally: () => {
+        procesandoRef.current = false;
+        setProcesando(false);
+      },
     });
   };
 
@@ -711,6 +798,36 @@ export default function PosTerminal({
           autoComplete="off"
           className="field field-paper mt-3 h-9 w-full px-2.5 text-[13px]"
         />
+
+        {/* Toggle Mesa / Para llevar */}
+        <div className="mt-2.5 flex rounded-[8px] border border-paper-line bg-white/40 p-0.5">
+          <button
+            type="button"
+            onClick={() => setTipoServicio('mesa')}
+            aria-pressed={tipoServicio === 'mesa'}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-[6px] py-1.5 text-[12px] font-bold transition-all ${
+              tipoServicio === 'mesa'
+                ? 'bg-paper-ink text-white shadow-sm'
+                : 'text-paper-ink-soft hover:text-paper-ink'
+            }`}
+          >
+            <UtensilsCrossed className="size-3.5" strokeWidth={2.25} />
+            Mesa
+          </button>
+          <button
+            type="button"
+            onClick={() => setTipoServicio('llevar')}
+            aria-pressed={tipoServicio === 'llevar'}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-[6px] py-1.5 text-[12px] font-bold transition-all ${
+              tipoServicio === 'llevar'
+                ? 'bg-ember-strong text-white shadow-sm'
+                : 'text-paper-ink-soft hover:text-paper-ink'
+            }`}
+          >
+            <ShoppingBag className="size-3.5" strokeWidth={2.25} />
+            Para llevar
+          </button>
+        </div>
       </div>
 
       <div className="mx-4 border-b border-dashed border-paper-line" />
@@ -804,7 +921,7 @@ export default function PosTerminal({
                     type="text"
                     value={item.notas}
                     onChange={(e) =>
-                      setCarrito((prev) =>
+                      actualizarCarrito((prev) =>
                         prev.map((i) => (i.clave === item.clave ? { ...i, notas: e.target.value } : i))
                       )
                     }
@@ -840,8 +957,11 @@ export default function PosTerminal({
               max={subtotalCarrito}
               value={descuentoGlobal || ''}
               onChange={(e) =>
-                setDescuentoGlobal(Math.min(subtotalCarrito, parseFloat(e.target.value) || 0))
+                setDescuentoGlobal(
+                  Math.max(0, Math.min(subtotalCarrito, parseFloat(e.target.value) || 0))
+                )
               }
+              step="0.01"
               placeholder="0.00"
               className="field field-paper h-9 w-24 pl-7 pr-2 text-right font-mono text-[12.5px] tnum"
             />
@@ -1092,7 +1212,9 @@ export default function PosTerminal({
       {/* Cobro */}
       <Modal
         abierto={modalPagoAbierto}
-        onCerrar={() => setModalPagoAbierto(false)}
+        onCerrar={() => {
+          if (!procesandoRef.current && !pagoPendiente) setModalPagoAbierto(false);
+        }}
         titulo="Cobro de comanda"
         descripcion={
           proximaFicha !== null
@@ -1110,7 +1232,11 @@ export default function PosTerminal({
             onClick={confirmarPedidoYPago}
             icono={<Check className="size-4.5" strokeWidth={2.5} />}
           >
-            {procesando ? 'Procesando…' : `Confirmar y emitir · ${bolivianos(totalPagar)}`}
+            {procesando
+              ? 'Procesando…'
+              : pagoPendiente
+                ? `Reintentar pago · ${bolivianos(pedidoPendienteRef.current?.total ?? totalPagar)}`
+                : `Confirmar y emitir · ${bolivianos(totalPagar)}`}
           </Button>
         }
       >
@@ -1123,6 +1249,16 @@ export default function PosTerminal({
               {bolivianos(totalPagar)}
             </p>
           </div>
+
+          {pagoPendiente && pedidoPendienteRef.current && (
+            <div
+              role="alert"
+              className="rounded-field border border-warn/35 bg-warn/8 px-3.5 py-3 text-[12.5px] leading-5 text-ink-soft"
+            >
+              El pedido #{pedidoPendienteRef.current.id} ya fue creado y el stock descontado.
+              Reintenta el pago; no se creará otro pedido.
+            </div>
+          )}
 
           {/* Resumen del pedido en el cobro para validación rápida */}
           <div className="overflow-hidden rounded-card border border-line bg-card/60">
@@ -1198,6 +1334,7 @@ export default function PosTerminal({
                   <button
                     key={id}
                     type="button"
+                    disabled={pagoPendiente}
                     aria-pressed={activo}
                     onClick={() => setMetodoSeleccionado(id)}
                     className={`flex h-12 items-center gap-2.5 rounded-field border px-3 text-[13px] font-semibold transition-colors ${
@@ -1226,6 +1363,9 @@ export default function PosTerminal({
                     id="efectivo-recibido"
                     type="number"
                     inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    disabled={pagoPendiente}
                     value={efectivoRecibido}
                     onChange={(e) => setEfectivoRecibido(e.target.value)}
                     placeholder={totalPagar.toFixed(2)}
@@ -1237,6 +1377,7 @@ export default function PosTerminal({
               <div className="flex flex-wrap items-center gap-1.5">
                 <button
                   type="button"
+                  disabled={pagoPendiente}
                   onClick={() => setEfectivoRecibido(totalPagar.toFixed(2))}
                   className="h-9 rounded-[8px] border border-ember/40 bg-ember/10 px-3 text-[12px] font-semibold text-ember transition-colors hover:bg-ember/18"
                 >
@@ -1246,6 +1387,7 @@ export default function PosTerminal({
                   <button
                     key={billete}
                     type="button"
+                    disabled={pagoPendiente}
                     onClick={() => setEfectivoRecibido(billete.toString())}
                     className="h-9 rounded-[8px] border border-line-strong bg-raised px-3 font-mono text-[12px] font-semibold text-ink-soft tnum transition-colors hover:border-control hover:text-ink"
                   >
@@ -1270,6 +1412,7 @@ export default function PosTerminal({
               <input
                 id="referencia-pago"
                 type="text"
+                disabled={pagoPendiente}
                 value={referenciaPago}
                 onChange={(e) => setReferenciaPago(e.target.value)}
                 placeholder="Opcional"
