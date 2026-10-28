@@ -2,9 +2,6 @@
   "name": "dona-migue-pos",
   "version": "1.0.0",
   "private": true,
-  "engines": {
-    "node": "22.x"
-  },
   "scripts": {
     "dev": "npm --prefix pos-multisucursal run dev",
     "build": "npm --prefix pos-multisucursal run build",

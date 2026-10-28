@@ -1,6 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd pos-multisucursal && npm run build",
-  "outputDirectory": "pos-multisucursal/.vercel/output",
-  "installCommand": "cd pos-multisucursal && npm install"
-}
